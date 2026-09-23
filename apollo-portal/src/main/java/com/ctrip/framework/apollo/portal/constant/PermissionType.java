@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ public interface PermissionType {
    * system level permission
    */
   String CREATE_APPLICATION = "CreateApplication";
+  String MANAGE_USERS = "ManageUsers";
   String MANAGE_APP_MASTER = "ManageAppMaster";
 
   /**
@@ -45,5 +46,8 @@ public interface PermissionType {
 
   String RELEASE_NAMESPACE = "ReleaseNamespace";
 
+  String MODIFY_NAMESPACES_IN_CLUSTER = "ModifyNamespacesInCluster";
+
+  String RELEASE_NAMESPACES_IN_CLUSTER = "ReleaseNamespacesInCluster";
 
 }

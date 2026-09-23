@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,15 @@ import com.ctrip.framework.apollo.openapi.entity.ConsumerRole;
 
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
-public interface ConsumerRoleRepository extends PagingAndSortingRepository<ConsumerRole, Long> {
+public interface ConsumerRoleRepository extends JpaRepository<ConsumerRole, Long> {
   /**
    * find consumer roles by userId
    *
@@ -42,7 +43,12 @@ public interface ConsumerRoleRepository extends PagingAndSortingRepository<Consu
 
   ConsumerRole findByConsumerIdAndRoleId(long consumerId, long roleId);
 
+  List<ConsumerRole> findByConsumerIdInAndRoleId(List<Long> consumerIds, long roleId);
+
   @Modifying
-  @Query("UPDATE ConsumerRole SET IsDeleted=1, DataChange_LastModifiedBy = ?2 WHERE RoleId in ?1")
-  Integer batchDeleteByRoleIds(List<Long> roleIds, String operator);
+  @Query("UPDATE ConsumerRole SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE roleId in :roleIds and isDeleted = false")
+  Integer batchDeleteByRoleIds(@Param("roleIds") List<Long> roleIds,
+      @Param("operator") String operator);
 }

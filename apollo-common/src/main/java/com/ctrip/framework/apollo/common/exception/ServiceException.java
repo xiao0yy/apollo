@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@ import org.springframework.http.HttpStatus;
 
 public class ServiceException extends AbstractApolloHttpException {
 
-  public ServiceException(String str) {
-    super(str);
+  /**
+   * @see AbstractApolloHttpException#AbstractApolloHttpException(String, Object...)
+   */
+  public ServiceException(String msgtpl, Object... args) {
+    super(msgtpl, args);
     setHttpStatus(HttpStatus.INTERNAL_SERVER_ERROR);
   }
 

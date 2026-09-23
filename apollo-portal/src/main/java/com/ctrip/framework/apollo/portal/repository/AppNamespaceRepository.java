@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import com.ctrip.framework.apollo.common.entity.AppNamespace;
 import java.util.List;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
-public interface AppNamespaceRepository extends PagingAndSortingRepository<AppNamespace, Long> {
+public interface AppNamespaceRepository extends JpaRepository<AppNamespace, Long> {
 
   AppNamespace findByAppIdAndName(String appId, String namespaceName);
 
@@ -32,13 +33,21 @@ public interface AppNamespaceRepository extends PagingAndSortingRepository<AppNa
 
   List<AppNamespace> findByIsPublicTrue();
 
+  @Query("SELECT a.name FROM AppNamespace a WHERE a.isPublic = true AND a.isDeleted = false")
+  List<String> findNamesByIsPublicTrue();
+
   List<AppNamespace> findByAppId(String appId);
 
   @Modifying
-  @Query("UPDATE AppNamespace SET IsDeleted=1,DataChange_LastModifiedBy=?2 WHERE AppId=?1")
-  int batchDeleteByAppId(String appId, String operator);
+  @Query("UPDATE AppNamespace SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE appId = :appId and isDeleted = false")
+  int batchDeleteByAppId(@Param("appId") String appId, @Param("operator") String operator);
 
   @Modifying
-  @Query("UPDATE AppNamespace SET IsDeleted=1,DataChange_LastModifiedBy = ?3 WHERE AppId=?1 and Name = ?2")
-  int delete(String appId, String namespaceName, String operator);
+  @Query("UPDATE AppNamespace SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE appId = :appId and name = :namespaceName and isDeleted = false")
+  int delete(@Param("appId") String appId, @Param("namespaceName") String namespaceName,
+      @Param("operator") String operator);
 }

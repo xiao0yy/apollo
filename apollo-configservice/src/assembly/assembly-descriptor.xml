@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright 2021 Apollo Authors
+  ~ Copyright 2024 Apollo Authors
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -35,16 +35,7 @@
 			<lineEnding>unix</lineEnding>
 		</fileSet>
 		<fileSet>
-			<directory>src/main/config</directory>
-			<outputDirectory>config</outputDirectory>
-			<excludes>
-				<exclude>apollo-configservice.conf</exclude>
-				<exclude>application-github.properties</exclude>
-			</excludes>
-			<lineEnding>unix</lineEnding>
-		</fileSet>
-		<fileSet>
-			<directory>src/main/config</directory>
+			<directory>target/classes</directory>
 			<outputDirectory>/</outputDirectory>
 			<includes>
 				<include>apollo-configservice.conf</include>
@@ -56,6 +47,7 @@
 			<outputDirectory>/config</outputDirectory>
 			<includes>
 				<include>application-github.properties</include>
+				<include>application.properties</include>
 			</includes>
 		</fileSet>
 		<!--artifact -->

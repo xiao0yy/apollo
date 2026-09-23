@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,30 +19,31 @@ package com.ctrip.framework.apollo.biz.entity;
 import com.ctrip.framework.apollo.common.entity.BaseEntity;
 
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
+import org.hibernate.annotations.SQLRestriction;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
 @Entity
-@Table(name = "ServerConfig")
-@SQLDelete(sql = "Update ServerConfig set isDeleted = 1 where id = ?")
-@Where(clause = "isDeleted = 0")
+@Table(name = "`ServerConfig`")
+@SQLDelete(
+    sql = "Update `ServerConfig` set IsDeleted = true, DeletedAt = ROUND(UNIX_TIMESTAMP(NOW(4))*1000) where Id = ?")
+@SQLRestriction("`IsDeleted` = false")
 public class ServerConfig extends BaseEntity {
-  @Column(name = "Key", nullable = false)
+  @Column(name = "`Key`", nullable = false)
   private String key;
 
-  @Column(name = "Cluster", nullable = false)
+  @Column(name = "`Cluster`", nullable = false)
   private String cluster;
 
-  @Column(name = "Value", nullable = false)
+  @Column(name = "`Value`", nullable = false)
   private String value;
 
-  @Column(name = "Comment", nullable = false)
+  @Column(name = "`Comment`", nullable = false)
   private String comment;
 
   public String getKey() {
@@ -77,7 +78,9 @@ public class ServerConfig extends BaseEntity {
     this.cluster = cluster;
   }
 
+  @Override
   public String toString() {
-    return toStringHelper().add("key", key).add("value", value).add("comment", comment).toString();
+    return toStringHelper().add("key", key).add("value", value).add("cluster", cluster)
+        .add("comment", comment).toString();
   }
 }

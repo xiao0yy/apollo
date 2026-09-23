@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,7 @@ public class AccessKeyService {
   private final AccessKeyRepository accessKeyRepository;
   private final AuditService auditService;
 
-  public AccessKeyService(
-      AccessKeyRepository accessKeyRepository,
-      AuditService auditService) {
+  public AccessKeyService(AccessKeyRepository accessKeyRepository, AuditService auditService) {
     this.accessKeyRepository = accessKeyRepository;
     this.auditService = auditService;
   }
@@ -71,9 +69,10 @@ public class AccessKeyService {
 
     AccessKey accessKey = accessKeyRepository.findOneByAppIdAndId(appId, id);
     if (accessKey == null) {
-      throw new BadRequestException("AccessKey not exist");
+      throw BadRequestException.accessKeyNotExists();
     }
 
+    accessKey.setMode(entity.getMode());
     accessKey.setEnabled(entity.isEnabled());
     accessKey.setDataChangeLastModifiedBy(operator);
     accessKeyRepository.save(accessKey);
@@ -86,7 +85,7 @@ public class AccessKeyService {
   public void delete(String appId, long id, String operator) {
     AccessKey accessKey = accessKeyRepository.findOneByAppIdAndId(appId, id);
     if (accessKey == null) {
-      throw new BadRequestException("AccessKey not exist");
+      throw BadRequestException.accessKeyNotExists();
     }
 
     if (accessKey.isEnabled()) {

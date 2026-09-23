@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright 2021 Apollo Authors
+  ~ Copyright 2024 Apollo Authors
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@
 
                 <a type="button" class="btn btn-default btn-sm" data-tooltip="tooltip" data-placement="bottom"
                     title="{{'Component.Namespace.Master.Items.GrayscaleTips' | translate }}"
-                    ng-show="!namespace.hasBranch && namespace.isPropertiesFormat && namespace.hasModifyPermission"
+                    ng-show="!namespace.hasBranch && namespace.hasModifyPermission"
                     ng-click="preCreateBranch(namespace)">
                     <img src="img/test.png">
                     {{'Component.Namespace.Master.Items.Grayscale' | translate }}
@@ -112,6 +112,16 @@
                         <img src="img/operate.png"> <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu" style="right: 0; left: -160px;">
+                        <li ng-click="exportNamespace(namespace)">
+                            <a>
+                                <img src="img/export.png">
+                                {{'Component.Namespace.Master.Items.ExportNamespace' | translate }}</a>
+                        </li>
+                        <li ng-click="importNamespace(namespace)">
+                            <a>
+                                <img src="img/import.png">
+                                {{'Component.Namespace.Master.Items.ImportNamespace' | translate }}</a>
+                        </li>
                         <li ng-click="deleteNamespace(namespace)">
                             <a style="color: red">
                                 <img src="img/delete.png">
@@ -165,6 +175,22 @@
                     </ul>
                 </div>
                 <div class="col-md-6 col-sm-6 text-right">
+                    <img src="img/compare.png" class="ns_btn clipboard cursor-pointer"
+                         data-tooltip="tooltip" data-placement="bottom"
+                         title="{{'Component.Namespace.Master.Items.DiffItemTips' | translate }}"
+                         ng-click="goToDiffPage(namespace)"
+                         ng-show="namespace.displayControl.currentOperateBranch == 'master' && !namespace.isPropertiesFormat && !namespace.isTextEditing">
+                    &nbsp;
+                    <button type="button" class="ns_btn ns-icon-button cursor-pointer"
+                            data-tooltip="tooltip" data-placement="bottom"
+                            title="{{'Component.Namespace.Master.Items.RevokeItemTips' | translate }}"
+                            aria-label="{{'Component.Namespace.Master.Items.RevokeItem' | translate }}"
+                            ng-click="preRevokeItem(namespace)"
+                            ng-show="namespace.viewType == 'text' && namespace.displayControl.currentOperateBranch == 'master'
+                            && !namespace.isPropertiesFormat && !namespace.isTextEditing && namespace.hasModifyPermission">
+                        <img src="img/rollback.png" alt="">
+                    </button>
+                    &nbsp;
                     <img src="img/copy.png" class="ns_btn clipboard cursor-pointer"
                         data-clipboard-text="{{namespace.text}}" data-tooltip="tooltip" data-placement="bottom"
                         title="{{'Component.Namespace.Master.Items.CopyText' | translate }}"
@@ -173,6 +199,20 @@
                         data-placement="bottom" title="{{'Component.Namespace.Master.Items.GrammarCheck' | translate }}"
                         ng-show="namespace.isTextEditing && namespace.viewType == 'text' && namespace.isSyntaxCheckable"
                         ng-click="syntaxCheck(namespace)">
+                    <span ng-show="namespace.isTextEditing && namespace.viewType == 'text' && namespace.isSyntaxCheckable && namespace.format == 'json'">&nbsp;</span>
+                    <!-- 格式化按钮 -->
+                    <img src="img/brush.png" class="ns_btn cursor-pointer" data-tooltip="tooltip"
+                         data-placement="bottom"
+                         title="{{'Component.ConfigItem.FormatItemValue' | translate }}"
+                         ng-show="namespace.isTextEditing && namespace.viewType == 'text' && namespace.format == 'json'"
+                         ng-click="formatContent(namespace)">
+                    &nbsp;
+                    <img ng-src="{{ namespace.isTextFullscreen ? 'img/fullscreen-exit.svg' : 'img/fullscreen.svg' }}"
+                         class="ns_btn cursor-pointer text-fullscreen-icon"
+                         data-tooltip="tooltip" data-placement="bottom"
+                         ng-attr-title="{{ namespace.isTextFullscreen ? ('Component.Namespace.Master.Items.ExitFullscreen' | translate) : ('Component.Namespace.Master.Items.Fullscreen' | translate) }}"
+                         ng-show="namespace.viewType == 'text'"
+                         ng-click="toggleTextFullscreen(namespace)">
                     &nbsp;
                     <img src="img/cancel.png" class="ns_btn cursor-pointer" data-tooltip="tooltip"
                         data-placement="bottom"
@@ -190,6 +230,13 @@
                         title="{{'Component.Namespace.Master.Items.SummitChanged' | translate }}" data-toggle="modal"
                         data-target="#commitModal" ng-show="namespace.isTextEditing && namespace.viewType == 'text'"
                         ng-click="modifyByText(namespace)">
+
+                    <button type="button" class="btn btn-default btn-sm" data-tooltip="tooltip" data-placement="bottom"
+                            title="{{'Component.Namespace.Master.Items.Body.HistoryView.FilterHistory.SortByKey' | translate }}" ng-show="namespace.viewType == 'history' && namespace.displayControl.currentOperateBranch == 'master'
+                        && !namespace.isLinkedNamespace" ng-click="toggleHistorySearchInput(namespace)">
+                        <span class="glyphicon glyphicon-filter"></span>
+                        {{'Component.Namespace.Master.Items.Body.HistoryView.FilterHistory' | translate }}
+                    </button>
 
                     <button type="button" class="btn btn-default btn-sm" data-tooltip="tooltip" data-placement="bottom"
                         title="{{'Component.Namespace.Master.Items.SortByKey' | translate }}" ng-show="namespace.viewType == 'table' && namespace.displayControl.currentOperateBranch == 'master'
@@ -246,9 +293,14 @@
                 <!--not link namespace-->
                 <div ng-if="!namespace.isLinkedNamespace">
                     <div class="search-input" ng-show="namespace.displayControl.showSearchInput">
-                        <input type="text" class="form-control"
-                            placeholder="{{'Component.Namespace.Master.Items.Body.FilterByKey' | translate }}"
-                            ng-model="namespace.searchKey" ng-change="searchItems(namespace)">
+                        <form class="form-inline">
+                            <div class="form-group">
+                                <input type="text" class="form-control" id="searchItemKeyInput"
+                                       placeholder="{{'Component.Namespace.Master.Items.Body.FilterByKey' | translate }}"
+                                       ng-model="namespace.searchKey" ng-change="searchItems(namespace)">
+                            </div>
+                            <button type="button" class="btn btn-default" ng-click="resetSearchItems(namespace)">{{'Config.Sync.Rest' | translate }}</button>
+                        </form>
                     </div>
 
                     <table class="table table-bordered table-striped table-hover">
@@ -263,7 +315,9 @@
                                     ng-click="col='item.key';desc=!desc;">
                                     {{'Component.Namespace.Master.Items.Body.ItemKey' | translate }}&nbsp;
                                     <span class="glyphicon glyphicon-sort"></span>
-
+                                </th>
+                                <th>
+                                    {{'Component.ConfigItem.ItemTypeName' | translate }}
                                 </th>
                                 <th>
                                     {{'Component.Namespace.Master.Items.Body.ItemValue' | translate }}
@@ -302,7 +356,7 @@
                                         title="{{'Component.Namespace.Master.Items.Body.PublishedTitle' | translate }}"
                                         ng-if="!config.isModified">{{'Component.Namespace.Master.Items.Body.Published' | translate }}</span>
                                 </td>
-                                <td width="15%" class="cursor-pointer"
+                                <td width="20%" class="cursor-pointer"
                                     title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
                                     ng-click="showText(config.item.key)">
                                     <span ng-bind="config.item.key | limitTo: 250"></span>
@@ -311,34 +365,45 @@
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.HaveGrayscale' | translate }}"
                                         ng-click="namespace.displayControl.currentOperateBranch=namespace.branchName;namespace.branch.viewType='table'">{{'Component.Namespace.Master.Items.Body.Grayscale' | translate }}</span>
-                                    <span class="label label-success" ng-if="config.isModified && !config.oldValue"
+                                    <span class="label label-success" ng-if="config.isNewlyAdded"
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.NewAddedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.NewAdded' | translate }}</span>
                                     <span class="label label-info"
-                                        ng-if="config.isModified && config.oldValue && !config.isDeleted"
+                                        ng-if="config.isModified && !config.isDeleted && !config.isNewlyAdded"
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.ModifiedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.Modified' | translate }}</span>
                                     <span class="label label-danger" ng-if="config.isDeleted" data-tooltip="tooltip"
                                         data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.DeletedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.Deleted' | translate }}</span>
                                 </td>
-                                <td width="30%" class="cursor-pointer"
+                                <td width="6%" class="text-center">
+                                    <span ng-if="config.item.type == '0'"
+                                    >{{'Component.ConfigItem.ItemTypeString' | translate }}</span>
+                                    <span ng-if="config.item.type == '1'"
+                                    >{{'Component.ConfigItem.ItemTypeNumber' | translate }}</span>
+                                    <span ng-if="config.item.type == '2'"
+                                    >{{'Component.ConfigItem.ItemTypeBoolean' | translate }}</span>
+                                    <span ng-if="config.item.type == '3'"
+                                    >{{'Component.ConfigItem.ItemTypeJson' | translate }}</span>
+                                </td>
+                                <td width="25%" class="cursor-pointer"
                                     title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
                                     ng-click="showText(config.item.value)">
                                     <span ng-bind="config.item.value | limitTo: 250"></span>
                                     <span ng-bind="config.item.value.length > 250 ? '...': ''"></span>
                                 </td>
-                                <td width="13%" title="{{config.item.comment}}">
+                                <td width="15%" title="{{config.item.comment}}">
                                     <span ng-bind="config.item.comment | limitTo: 250"></span>
                                     <span ng-bind="config.item.comment.length > 250 ?'...' : ''"></span>
                                 </td>
-                                <td width="10%" ng-bind="config.item.dataChangeLastModifiedBy">
+                                <td width="10%" class="text-center"
+                                    ng-bind="config.item.dataChangeLastModifiedByDisplayName + '(' + config.item.dataChangeLastModifiedBy + ')'">
                                 </td>
-                                <td width="16%"
+                                <td width="10%" class="text-center"
                                     ng-bind="config.item.dataChangeLastModifiedTime | date: 'yyyy-MM-dd HH:mm:ss'">
                                 </td>
 
-                                <td width="8%" class="text-center" ng-if="!config.isDeleted">
+                                <td width="6%" class="text-center" ng-if="!config.isDeleted">
                                     <img src="img/edit.png" data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.ModifyTips' | translate }}"
                                         ng-click="editItem(namespace, config.item)"
@@ -386,6 +451,9 @@
 
                                 </th>
                                 <th>
+                                    {{'Component.ConfigItem.ItemTypeName' | translate }}
+                                </th>
+                                <th>
                                     {{'Component.Namespace.Master.Items.Body.ItemValue' | translate }}
                                 </th>
                                 <th>
@@ -429,30 +497,40 @@
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.HaveGrayscale' | translate }}"
                                         ng-click="namespace.displayControl.currentOperateBranch=namespace.branchName;namespace.branch.viewType='table'">{{'Component.Namespace.Master.Items.Body.Grayscale' | translate }}</span>
-                                    <span class="label label-success" ng-if="config.isModified && !config.oldValue"
+                                    <span class="label label-success" ng-if="config.isNewlyAdded"
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.NewAddedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.NewAdded' | translate }}</span>
                                     <span class="label label-info"
-                                        ng-if="config.isModified && config.oldValue && !config.isDeleted"
+                                        ng-if="config.isModified  && !config.isDeleted && !config.isNewlyAdded"
                                         data-tooltip="tooltip" data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.ModifiedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.Modified' | translate }}</span>
                                     <span class="label label-danger" ng-if="config.isDeleted" data-tooltip="tooltip"
                                         data-placement="bottom"
                                         title="{{'Component.Namespace.Master.Items.Body.DeletedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.Deleted' | translate }}</span>
                                 </td>
-                                <td width="30%" class="cursor-pointer"
+                                <td width="7%" class="text-center">
+                                    <span ng-if="config.item.type == '0'"
+                                    >{{'Component.ConfigItem.ItemTypeString' | translate }}</span>
+                                    <span ng-if="config.item.type == '1'"
+                                    >{{'Component.ConfigItem.ItemTypeNumber' | translate }}</span>
+                                    <span ng-if="config.item.type == '2'"
+                                    >{{'Component.ConfigItem.ItemTypeBoolean' | translate }}</span>
+                                    <span ng-if="config.item.type == '3'"
+                                    >{{'Component.ConfigItem.ItemTypeJson' | translate }}</span>
+                                </td>
+                                <td width="25%" class="cursor-pointer"
                                     title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
                                     ng-click="showText(config.item.value)">
                                     <span ng-bind="config.item.value | limitTo: 250"></span>
                                     <span ng-bind="config.item.value.length > 250 ? '...': ''"></span>
                                 </td>
-                                <td width="13%" title="{{config.item.comment}}">
+                                <td width="11%" title="{{config.item.comment}}">
                                     <span ng-bind="config.item.comment | limitTo: 250"></span>
                                     <span ng-bind="config.item.comment.length > 250 ?'...' : ''"></span>
                                 </td>
-                                <td width="10%" ng-bind="config.item.dataChangeLastModifiedBy">
+                                <td width="7%" ng-bind="config.item.dataChangeLastModifiedByDisplayName + '(' + config.item.dataChangeLastModifiedBy + ')'">
                                 </td>
-                                <td width="16%"
+                                <td width="13%"
                                     ng-bind="config.item.dataChangeLastModifiedTime | date: 'yyyy-MM-dd HH:mm:ss'">
                                 </td>
 
@@ -541,6 +619,9 @@
 
                                         </th>
                                         <th>
+                                            {{'Component.ConfigItem.ItemTypeName' | translate }}
+                                        </th>
+                                        <th>
                                             {{'Component.Namespace.Master.Items.Body.ItemValue' | translate }}
                                         </th>
                                         <th>
@@ -567,26 +648,38 @@
                                 </thead>
                                 <tbody>
                                     <tr ng-repeat="config in namespace.publicNamespace.viewItems |orderBy:col:desc"
-                                        ng-if="config.item.key && !config.isModified && !config.isDeleted">
+                                        ng-if="config.item.key && ((!config.isModified && !config.isDeleted) || config.oldValue)">
                                         <td width="15%" class="cursor-pointer"
                                             title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
                                             ng-click="showText(config.item.key)">
                                             <span ng-bind="config.item.key | limitTo: 250"></span>
                                             <span ng-bind="config.item.key.length > 250 ? '...' :''"></span>
                                         </td>
-                                        <td width="35%" class="cursor-pointer"
-                                            title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
-                                            ng-click="showText(config.item.value)">
-                                            <span ng-bind="config.item.value | limitTo: 250"></span>
-                                            <span ng-bind="config.item.value.length > 250 ? '...': ''"></span>
+                                        <td width="7%" class="text-center">
+                                            <span ng-if="config.item.type == '0'"
+                                            >{{'Component.ConfigItem.ItemTypeString' | translate }}</span>
+                                            <span ng-if="config.item.type == '1'"
+                                            >{{'Component.ConfigItem.ItemTypeNumber' | translate }}</span>
+                                            <span ng-if="config.item.type == '2'"
+                                            >{{'Component.ConfigItem.ItemTypeBoolean' | translate }}</span>
+                                            <span ng-if="config.item.type == '3'"
+                                            >{{'Component.ConfigItem.ItemTypeJson' | translate }}</span>
                                         </td>
-                                        <td width="15%" title="{{config.item.comment}}">
+                                        <td width="30%" class="cursor-pointer"
+                                            title="{{'Component.Namespace.Master.Items.Body.ClickToSee' | translate }}"
+                                            ng-click="(config.isModified || config.isDeleted) ? showText(config.oldValue) : showText(config.item.value)">
+                                            <span ng-if="config.isModified || config.isDeleted" ng-bind="config.oldValue | limitTo: 250"></span>
+                                            <span ng-if="config.isModified || config.isDeleted" ng-bind="config.oldValue.length > 250 ? '...': ''"></span>
+                                            <span ng-if="!config.isModified && !config.isDeleted" ng-bind="config.item.value | limitTo: 250"></span>
+                                            <span ng-if="!config.isModified && !config.isDeleted" ng-bind="config.item.value.length > 250 ? '...': ''"></span>
+                                        </td>
+                                        <td width="13%" title="{{config.item.comment}}">
                                             <span ng-bind="config.item.comment | limitTo: 250"></span>
                                             <span ng-bind="config.item.comment.length > 250 ?'...' : ''"></span>
                                         </td>
-                                        <td width="10%" ng-bind="config.item.dataChangeLastModifiedBy">
+                                        <td width="7%" ng-bind="config.item.dataChangeLastModifiedByDisplayName + '(' + config.item.dataChangeLastModifiedBy + ')'">
                                         </td>
-                                        <td width="15%"
+                                        <td width="12%"
                                             ng-bind="config.item.dataChangeLastModifiedTime | date: 'yyyy-MM-dd HH:mm:ss'">
                                         </td>
 
@@ -651,11 +744,11 @@
                                         ng-click="showText(config.item.key)">
                                         <span ng-bind="config.item.key | limitTo: 250"></span>
                                         <span ng-bind="config.item.key.length > 250 ? '...' :''"></span>
-                                        <span class="label label-success" ng-if="config.isModified && !config.oldValue"
+                                        <span class="label label-success" ng-if="config.isNewlyAdded"
                                             data-tooltip="tooltip" data-placement="bottom"
                                             title="{{'Component.Namespace.Master.Items.Body.NewAddedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.NewAdded' | translate }}</span>
                                         <span class="label label-info"
-                                            ng-if="config.isModified && config.oldValue && !config.isDeleted"
+                                            ng-if="config.isModified  && !config.isDeleted && !config.isNewlyAdded"
                                             data-tooltip="tooltip" data-placement="bottom"
                                             title="{{'Component.Namespace.Master.Items.Body.ModifiedTips' | translate }}">{{'Component.Namespace.Master.Items.Body.Modified' | translate }}</span>
                                         <span class="label label-danger" ng-if="config.isDeleted" data-tooltip="tooltip"
@@ -713,26 +806,68 @@
             </div>
 
             <!--text view-->
-            <!--只读模式下的文本内容,不替换换行符-->
-            <div ui-ace="aceConfig" readonly="true" class="form-control no-radius"
-                rows="{{namespace.itemCnt < 10 ? 10: namespace.itemCnt>20 ? 20:namespace.itemCnt}}"
-                ng-show="namespace.viewType == 'text' && !namespace.isTextEditing" ng-model="namespace.text">
-            </div>
-            <!--编辑状态下的文本内容,会过滤掉换行符-->
-            <div ui-ace="aceConfig" class="form-control no-radius"
-                rows="{{namespace.itemCnt < 10 ? 10: namespace.itemCnt>20 ? 20:namespace.itemCnt}}"
-                ng-show="namespace.viewType == 'text' && namespace.isTextEditing" ng-disabled="!namespace.isTextEditing"
-                ng-model="namespace.editText">
+            <div class="namespace-text-editor-container"
+                 id="namespaceTextEditor{{namespace.id}}"
+                 ng-show="namespace.viewType == 'text'">
+                <div class="panel-heading" ng-show="namespace.isLinkedNamespace">
+                    <div class="row">
+                        <div class="padding-top-5 col-md-4 col-sm-4">
+                            {{'Component.Namespace.Master.Items.Body.Link.Title' | translate }}
+                        </div>
+                    </div>
+                </div>
+
+                <!--只读模式下的文本内容,不替换换行符-->
+                <div ui-ace="aceConfig" readonly="true" class="form-control no-radius"
+                    rows="{{namespace.itemCnt < 10 ? 10: namespace.itemCnt>20 ? 20:namespace.itemCnt}}"
+                    ng-show="!namespace.isTextEditing" ng-model="namespace.text">
+                </div>
+
+                <!--编辑状态下的文本内容,会过滤掉换行符-->
+                <div ui-ace="aceConfig" class="form-control no-radius"
+                    rows="{{namespace.itemCnt < 10 ? 10: namespace.itemCnt>20 ? 20:namespace.itemCnt}}"
+                    ng-show="namespace.isTextEditing" ng-disabled="!namespace.isTextEditing"
+                    ng-model="namespace.editText">
+                </div>
+
+                <div class="panel-heading" ng-show="namespace.isLinkedNamespace">
+                    <div class="row">
+                        <div class="padding-top-5 col-md-4 col-sm-4">
+                            {{'Component.Namespace.Master.Items.Body.Public.Title' | translate }}
+                            <a href="{{ '/config.html' | prefixPath }}?#/appid={{namespace.publicNamespace.baseInfo.appId}}&env={{env}}&cluster={{namespace.publicNamespace.baseInfo.clusterName}}"
+                               target="_blank">
+                                <small>
+                                    ({{'Common.AppId' | translate }}:{{namespace.publicNamespace.baseInfo.appId}},
+                                    {{'Common.Cluster' | translate }}:{{namespace.publicNamespace.baseInfo.clusterName}})
+                                </small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!--关联的 Parent Namespace 内容,只读模式,不替换换行符-->
+                <div ui-ace="aceConfig" readonly="true" class="form-control no-radius"
+                     rows="{{namespace.itemCnt < 10 ? 10: namespace.itemCnt>20 ? 20:namespace.itemCnt}}"
+                     ng-show="namespace.isLinkedNamespace"
+                     ng-model="namespace.publicNamespaceText">
+                </div>
             </div>
 
             <!--history view-->
             <div class="J_historyview history-view" ng-show="namespace.viewType == 'history'">
+                <!-- 过滤更改历史 -->
+                <div class="search-input" ng-show="namespace.displayControl.showHistorySearchInput">
+                    <input type="text" class="form-control"
+                           placeholder="{{'Component.Namespace.Master.Items.Body.FilterByKey' | translate }}"
+                           ng-model="namespace.HistorySearchKey" ng-change="searchHistory(namespace)">
+                </div>
                 <div class="media" ng-show="namespace.commits && namespace.commits.length"
                     ng-repeat="commits in namespace.commits">
                     <div class="media-body">
                         <div class="row">
                             <div class="col-md-6 col-sm-6">
-                                <h3 class="media-heading" ng-bind="commits.dataChangeCreatedBy"></h3>
+                                <h3 class="media-heading"
+                                    ng-bind="commits.dataChangeCreatedByDisplayName + '(' + commits.dataChangeCreatedBy + ')'"></h3>
                             </div>
                             <div class="col-md-6 col-sm-6 text-right">
                                 <h5 class="media-heading"
@@ -834,20 +969,80 @@
                         </table>
 
                         <!--not properties format-->
-                        <div ng-if="!namespace.isPropertiesFormat">
-                            <div ng-repeat="item in commits.changeSets.createItems">
-                                <textarea class="form-control no-radius" rows="20" ng-disabled="true"
-                                    ng-bind="item.value">
-                                </textarea>
-                            </div>
+                        <table class="table table-bordered table-striped text-center table-hover"
+                            style="margin-top: 5px;" ng-if="!namespace.isPropertiesFormat">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.ItemType' | translate }}
+                                    </th>
+                                    <th>
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.ItemOldValue' | translate }}
+                                    </th>
+                                    <th>
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.ItemNewValue' | translate }}
+                                    </th>
+                                    <th>
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.ItemComment' | translate }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
 
-                            <div ng-repeat="item in commits.changeSets.updateItems">
-                                <textarea class="form-control no-radius" rows="20" ng-disabled="true"
-                                    ng-bind="item.newItem.value">
-                                </textarea>
-                            </div>
-                        </div>
-
+                                <!--兼容老数据,不显示item类型为空行和注释的item-->
+                                <tr ng-repeat="item in commits.changeSets.createItems" ng-show="item.key">
+                                    <td width="6%">
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.NewAdded' | translate }}
+                                    </td>
+                                    <td width="28%">
+                                    </td>
+                                    <td width="28%" class="cursor-pointer" title="{{item.value}}"
+                                        ng-click="showText(item.value)">
+                                        <span ng-bind="item.value | limitTo: 250"></span>
+                                        <span ng-bind="item.value.length > 250 ? '...': ''"></span>
+                                    </td>
+                                    <td width="18%" title="{{item.comment}}">
+                                        <span ng-bind="item.comment | limitTo: 250"></span>
+                                        <span ng-bind="item.comment.length > 250 ?'...' : ''"></span>
+                                    </td>
+                                </tr>
+                                <tr ng-repeat="item in commits.changeSets.updateItems">
+                                    <td width="6%">
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.Updated' | translate }}
+                                    </td>
+                                    <td width="28%" class="cursor-pointer" title="{{item.oldItem.value}}"
+                                        ng-click="showText(item.oldItem.value)">
+                                        <span ng-bind="item.oldItem.value | limitTo: 250"></span>
+                                        <span ng-bind="item.oldItem.value.length > 250 ? '...': ''"></span>
+                                    </td>
+                                    <td width="28%" class="cursor-pointer" title="{{item.newItem.value}}"
+                                        ng-click="showText(item.newItem.value)">
+                                        <span ng-bind="item.newItem.value | limitTo: 250"></span>
+                                        <span ng-bind="item.newItem.value.length > 250 ? '...': ''"></span>
+                                    </td>
+                                    <td width="18%" title="{{item.newItem.comment}}">
+                                        <span ng-bind="item.newItem.comment | limitTo: 250"></span>
+                                        <span ng-bind="item.newItem.comment.length > 250 ?'...' : ''"></span>
+                                    </td>
+                                </tr>
+                                <tr ng-repeat="item in commits.changeSets.deleteItems"
+                                    ng-show="item.key || item.comment">
+                                    <td width="6%">
+                                        {{'Component.Namespace.Master.Items.Body.HistoryView.Deleted' | translate }}
+                                    </td>
+                                    <td width="28%" title="{{item.value}}">
+                                        <span ng-bind="item.value | limitTo: 250"></span>
+                                        <span ng-bind="item.value.length > 250 ? '...': ''"></span>
+                                    </td>
+                                    <td width="28%">
+                                    </td>
+                                    <td width="18%" title="{{item.comment}}">
+                                        <span ng-bind="item.comment | limitTo: 250"></span>
+                                        <span ng-bind="item.comment.length > 250 ?'...' : ''"></span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
 
                     </div>
                     <hr>

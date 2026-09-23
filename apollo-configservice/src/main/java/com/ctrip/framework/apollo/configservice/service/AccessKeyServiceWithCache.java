@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package com.ctrip.framework.apollo.configservice.service;
 import com.ctrip.framework.apollo.biz.config.BizConfig;
 import com.ctrip.framework.apollo.biz.entity.AccessKey;
 import com.ctrip.framework.apollo.biz.repository.AccessKeyRepository;
+import com.ctrip.framework.apollo.common.constants.AccessKeyMode;
 import com.ctrip.framework.apollo.core.utils.ApolloThreadFactory;
 import com.ctrip.framework.apollo.tracer.Tracer;
 import com.ctrip.framework.apollo.tracer.spi.Transaction;
@@ -37,11 +38,12 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -49,7 +51,7 @@ import org.springframework.util.CollectionUtils;
  * @author nisiyong
  */
 @Service
-public class AccessKeyServiceWithCache implements InitializingBean {
+public class AccessKeyServiceWithCache implements InitializingBean, DisposableBean {
 
   private static Logger logger = LoggerFactory.getLogger(AccessKeyServiceWithCache.class);
 
@@ -66,8 +68,8 @@ public class AccessKeyServiceWithCache implements InitializingBean {
   private ListMultimap<String, AccessKey> accessKeyCache;
   private ConcurrentMap<Long, AccessKey> accessKeyIdCache;
 
-  @Autowired
-  public AccessKeyServiceWithCache(AccessKeyRepository accessKeyRepository, BizConfig bizConfig) {
+  public AccessKeyServiceWithCache(final AccessKeyRepository accessKeyRepository,
+      final BizConfig bizConfig) {
     this.accessKeyRepository = accessKeyRepository;
     this.bizConfig = bizConfig;
 
@@ -79,39 +81,52 @@ public class AccessKeyServiceWithCache implements InitializingBean {
         ApolloThreadFactory.create("AccessKeyServiceWithCache", true));
     lastTimeScanned = new Date(0L);
 
-    ListMultimap<String, AccessKey> multimap = ListMultimapBuilder.treeKeys(String.CASE_INSENSITIVE_ORDER)
-        .arrayListValues().build();
+    ListMultimap<String, AccessKey> multimap =
+        ListMultimapBuilder.treeKeys(String.CASE_INSENSITIVE_ORDER).arrayListValues().build();
     accessKeyCache = Multimaps.synchronizedListMultimap(multimap);
     accessKeyIdCache = Maps.newConcurrentMap();
   }
 
   public List<String> getAvailableSecrets(String appId) {
+    return getSecrets(appId, key -> key.isEnabled() && key.getMode() == AccessKeyMode.FILTER);
+  }
+
+  public List<String> getObservableSecrets(String appId) {
+    return getSecrets(appId, key -> key.isEnabled() && key.getMode() == AccessKeyMode.OBSERVER);
+  }
+
+  public List<String> getSecrets(String appId, Predicate<AccessKey> filter) {
     List<AccessKey> accessKeys = accessKeyCache.get(appId);
     if (CollectionUtils.isEmpty(accessKeys)) {
       return Collections.emptyList();
     }
 
-    return accessKeys.stream()
-        .filter(AccessKey::isEnabled)
-        .map(AccessKey::getSecret)
+    return accessKeys.stream().filter(filter).map(AccessKey::getSecret)
         .collect(Collectors.toList());
   }
 
   @Override
   public void afterPropertiesSet() throws Exception {
     populateDataBaseInterval();
-    scanNewAndUpdatedAccessKeys(); //block the startup process until load finished
+    scanNewAndUpdatedAccessKeys(); // block the startup process until load finished
 
-    scheduledExecutorService.scheduleWithFixedDelay(this::scanNewAndUpdatedAccessKeys,
-        scanInterval, scanInterval, scanIntervalTimeUnit);
+    scheduledExecutorService.scheduleWithFixedDelay(this::scanNewAndUpdatedAccessKeys, scanInterval,
+        scanInterval, scanIntervalTimeUnit);
 
-    scheduledExecutorService.scheduleAtFixedRate(this::rebuildAccessKeyCache,
-        rebuildInterval, rebuildInterval, rebuildIntervalTimeUnit);
+    scheduledExecutorService.scheduleAtFixedRate(this::rebuildAccessKeyCache, rebuildInterval,
+        rebuildInterval, rebuildIntervalTimeUnit);
+  }
+
+  @Override
+  public void destroy() {
+    if (scheduledExecutorService != null) {
+      scheduledExecutorService.shutdownNow();
+    }
   }
 
   private void scanNewAndUpdatedAccessKeys() {
-    Transaction transaction = Tracer.newTransaction("Apollo.AccessKeyServiceWithCache",
-        "scanNewAndUpdatedAccessKeys");
+    Transaction transaction =
+        Tracer.newTransaction("Apollo.AccessKeyServiceWithCache", "scanNewAndUpdatedAccessKeys");
     try {
       loadNewAndUpdatedAccessKeys();
       transaction.setStatus(Transaction.SUCCESS);
@@ -124,8 +139,8 @@ public class AccessKeyServiceWithCache implements InitializingBean {
   }
 
   private void rebuildAccessKeyCache() {
-    Transaction transaction = Tracer.newTransaction("Apollo.AccessKeyServiceWithCache",
-        "rebuildCache");
+    Transaction transaction =
+        Tracer.newTransaction("Apollo.AccessKeyServiceWithCache", "rebuildCache");
     try {
       deleteAccessKeyCache();
       transaction.setStatus(Transaction.SUCCESS);
@@ -139,26 +154,39 @@ public class AccessKeyServiceWithCache implements InitializingBean {
 
   private void loadNewAndUpdatedAccessKeys() {
     boolean hasMore = true;
+    Date currentTime = new Date();
+
+    if (!lastTimeScanned.equals(new Date(0L))) {
+      // prevent time drift
+      lastTimeScanned = new Date(lastTimeScanned.getTime() - 1000);
+    }
+
     while (hasMore && !Thread.currentThread().isInterrupted()) {
-      //current batch is 500
+      // current batch is 500
       List<AccessKey> accessKeys = accessKeyRepository
-          .findFirst500ByDataChangeLastModifiedTimeGreaterThanOrderByDataChangeLastModifiedTimeAsc(lastTimeScanned);
-      if (CollectionUtils.isEmpty(accessKeys)) {
-        break;
-      }
+          .findFirst500ByDataChangeLastModifiedTimeGreaterThanEqualAndDataChangeLastModifiedTimeLessThanOrderByDataChangeLastModifiedTimeAsc(
+              lastTimeScanned, currentTime);
 
       int scanned = accessKeys.size();
       mergeAccessKeys(accessKeys);
-      logger.info("Loaded {} new/updated Accesskey from startTime {}", scanned, lastTimeScanned);
+      if (scanned > 0) {
+        logger.info("Loaded {} new/updated Accesskey from startTime {}", scanned, lastTimeScanned);
+      }
 
       hasMore = scanned == 500;
-      lastTimeScanned = accessKeys.get(scanned - 1).getDataChangeLastModifiedTime();
 
-      // In order to avoid missing some records at the last time, we need to scan records at this time individually
+      // In order to avoid missing some records at the last time, we need to scan records at this
+      // time individually
       if (hasMore) {
-        List<AccessKey> lastModifiedTimeAccessKeys = accessKeyRepository.findByDataChangeLastModifiedTime(lastTimeScanned);
+        lastTimeScanned = accessKeys.get(scanned - 1).getDataChangeLastModifiedTime();
+        List<AccessKey> lastModifiedTimeAccessKeys =
+            accessKeyRepository.findByDataChangeLastModifiedTime(lastTimeScanned);
         mergeAccessKeys(lastModifiedTimeAccessKeys);
-        logger.info("Loaded {} new/updated Accesskey at lastModifiedTime {}", scanned, lastTimeScanned);
+        logger.info("Loaded {} new/updated Accesskey at lastModifiedTime {}", scanned,
+            lastTimeScanned);
+        lastTimeScanned = new Date(lastTimeScanned.getTime() + 1000);
+      } else {
+        lastTimeScanned = currentTime;
       }
     }
   }
@@ -171,7 +199,7 @@ public class AccessKeyServiceWithCache implements InitializingBean {
       accessKeyCache.put(accessKey.getAppId(), accessKey);
 
       if (thatInCache != null && accessKey.getDataChangeLastModifiedTime()
-          .after(thatInCache.getDataChangeLastModifiedTime())) {
+          .compareTo(thatInCache.getDataChangeLastModifiedTime()) >= 0) {
         accessKeyCache.remove(accessKey.getAppId(), thatInCache);
         logger.info("Found Accesskey changes, old: {}, new: {}", thatInCache, accessKey);
       }
@@ -193,7 +221,7 @@ public class AccessKeyServiceWithCache implements InitializingBean {
         foundIds.add(accessKey.getId());
       }
 
-      //handle deleted
+      // handle deleted
       SetView<Long> deletedIds = Sets.difference(Sets.newHashSet(toRebuildIds), foundIds);
       handleDeletedAccessKeys(deletedIds);
     }

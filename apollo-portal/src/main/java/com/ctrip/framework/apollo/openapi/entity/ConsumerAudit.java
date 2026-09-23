@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,38 +20,38 @@ import com.google.common.base.MoreObjects;
 
 import java.util.Date;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.PrePersist;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
 @Entity
-@Table(name = "ConsumerAudit")
+@Table(name = "`ConsumerAudit`")
 public class ConsumerAudit {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "Id")
+  @Column(name = "`Id`")
   private long id;
 
-  @Column(name = "ConsumerId", nullable = false)
+  @Column(name = "`ConsumerId`", nullable = false)
   private long consumerId;
 
-  @Column(name = "Uri", nullable = false)
+  @Column(name = "`Uri`", nullable = false)
   private String uri;
 
-  @Column(name = "Method", nullable = false)
+  @Column(name = "`Method`", nullable = false)
   private String method;
 
-  @Column(name = "DataChange_CreatedTime")
+  @Column(name = "`DataChange_CreatedTime`")
   private Date dataChangeCreatedTime;
 
-  @Column(name = "DataChange_LastTime")
+  @Column(name = "`DataChange_LastTime`")
   private Date dataChangeLastModifiedTime;
 
   @PrePersist
@@ -114,14 +114,9 @@ public class ConsumerAudit {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .omitNullValues()
-        .add("id", id)
-        .add("consumerId", consumerId)
-        .add("uri", uri)
-        .add("method", method)
+    return MoreObjects.toStringHelper(this).omitNullValues().add("id", id)
+        .add("consumerId", consumerId).add("uri", uri).add("method", method)
         .add("dataChangeCreatedTime", dataChangeCreatedTime)
-        .add("dataChangeLastModifiedTime", dataChangeLastModifiedTime)
-        .toString();
+        .add("dataChangeLastModifiedTime", dataChangeLastModifiedTime).toString();
   }
 }

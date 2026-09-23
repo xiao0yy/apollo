@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,29 +20,40 @@ import com.ctrip.framework.apollo.portal.entity.po.Role;
 import java.util.List;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
-public interface RoleRepository extends PagingAndSortingRepository<Role, Long> {
+public interface RoleRepository extends JpaRepository<Role, Long> {
 
   /**
    * find role by role name
    */
   Role findTopByRoleName(String roleName);
 
-  @Query("SELECT r.id from Role r where (r.roleName = CONCAT('Master+', ?1) "
+  @Query("SELECT r.id from Role r where r.roleName like CONCAT('Master+', ?1) "
       + "OR r.roleName like CONCAT('ModifyNamespace+', ?1, '+%') "
       + "OR r.roleName like CONCAT('ReleaseNamespace+', ?1, '+%')  "
-      + "OR r.roleName = CONCAT('ManageAppMaster+', ?1))")
+      + "OR r.roleName like CONCAT('ManageAppMaster+', ?1) "
+      + "OR r.roleName like CONCAT('ModifyNamespacesInCluster+', ?1, '+%')"
+      + "OR r.roleName like CONCAT('ReleaseNamespacesInCluster+', ?1, '+%')")
   List<Long> findRoleIdsByAppId(String appId);
 
-  @Query("SELECT r.id from Role r where (r.roleName = CONCAT('ModifyNamespace+', ?1, '+', ?2) "
-      + "OR r.roleName = CONCAT('ReleaseNamespace+', ?1, '+', ?2))")
+  @Query("SELECT r.id from Role r where r.roleName like CONCAT('ModifyNamespace+', ?1, '+', ?2) "
+      + "OR r.roleName like CONCAT('ModifyNamespace+', ?1, '+', ?2, '+%') "
+      + "OR r.roleName like CONCAT('ReleaseNamespace+', ?1, '+', ?2) "
+      + "OR r.roleName like CONCAT('ReleaseNamespace+', ?1, '+', ?2, '+%')")
   List<Long> findRoleIdsByAppIdAndNamespace(String appId, String namespaceName);
 
   @Modifying
-  @Query("UPDATE Role SET IsDeleted=1, DataChange_LastModifiedBy = ?2 WHERE Id in ?1")
-  Integer batchDelete(List<Long> roleIds, String operator);
+  @Query("UPDATE Role SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE id in :roleIds and isDeleted = false")
+  Integer batchDelete(@Param("roleIds") List<Long> roleIds, @Param("operator") String operator);
+
+  @Query("SELECT r.id from Role r where r.roleName = CONCAT('ModifyNamespacesInCluster+', ?1, '+', ?2, '+', ?3) "
+      + "OR r.roleName = CONCAT('ReleaseNamespacesInCluster+', ?1, '+', ?2, '+', ?3)")
+  List<Long> findRoleIdsByCluster(String appId, String env, String clusterName);
 }

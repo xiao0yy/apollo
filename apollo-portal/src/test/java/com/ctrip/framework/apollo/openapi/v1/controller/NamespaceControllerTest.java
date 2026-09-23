@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ public class NamespaceControllerTest extends AbstractControllerTest {
 
   @Test
   public void shouldFailWhenAppNamespaceNameIsInvalid() {
-    Assert.assertTrue(consumerPermissionValidator.hasCreateNamespacePermission(null, null));
+    Assert.assertTrue(consumerPermissionValidator.hasCreateNamespacePermission(null));
 
     OpenAppNamespaceDTO dto = new OpenAppNamespaceDTO();
     dto.setAppId("appId");
@@ -47,10 +47,8 @@ public class NamespaceControllerTest extends AbstractControllerTest {
     dto.setFormat(ConfigFileFormat.Properties.getValue());
     dto.setDataChangeCreatedBy("apollo");
     try {
-      restTemplate.postForEntity(
-          url("/openapi/v1/apps/{appId}/appnamespaces"),
-          dto, OpenAppNamespaceDTO.class, dto.getAppId()
-      );
+      restTemplate.postForEntity(url("/openapi/v1/apps/{appId}/appnamespaces"), dto,
+          OpenAppNamespaceDTO.class, dto.getAppId());
       Assert.fail("should throw");
     } catch (HttpClientErrorException e) {
       String result = e.getResponseBodyAsString();

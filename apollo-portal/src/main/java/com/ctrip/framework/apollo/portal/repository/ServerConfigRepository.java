@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ package com.ctrip.framework.apollo.portal.repository;
 
 import com.ctrip.framework.apollo.portal.entity.po.ServerConfig;
 
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ServerConfigRepository extends PagingAndSortingRepository<ServerConfig, Long> {
+public interface ServerConfigRepository extends JpaRepository<ServerConfig, Long> {
   ServerConfig findByKey(String key);
 }

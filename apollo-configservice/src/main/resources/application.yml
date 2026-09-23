@@ -1,5 +1,5 @@
 #
-# Copyright 2021 Apollo Authors
+# Copyright 2024 Apollo Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,35 +21,42 @@ spring:
   cloud:
     consul:
       enabled: false
-ctrip:
-  appid: 100003171
+    zookeeper:
+      enabled: false
+  jpa:
+    properties:
+      hibernate:
+        metadata_builder_contributor: com.ctrip.framework.apollo.common.jpa.SqlFunctionsMetadataBuilderContributor
+  lifecycle:
+    timeout-per-shutdown-phase: ${GRACEFUL_SHUTDOWN_TIMEOUT:10s}
 
 server:
   port: 8080
+  shutdown: graceful
 
 logging:
   file:
-    name: /opt/logs/100003171/apollo-configservice.log
+    name: /opt/logs/apollo-configservice.log
 
 eureka:
   instance:
     hostname: ${hostname:localhost}
-    preferIpAddress: true
+    prefer-ip-address: true
     status-page-url-path: /info
     health-check-url-path: /health
   server:
-    peerEurekaNodesUpdateIntervalMs: 60000
-    enableSelfPreservation: false
+    peer-eureka-nodes-update-interval-ms: 60000
+    enable-self-preservation: false
   client:
-    serviceUrl:
+    service-url:
       # This setting will be overridden by eureka.service.url setting from ApolloConfigDB.ServerConfig or System Property
       # see com.ctrip.framework.apollo.biz.eureka.ApolloEurekaClientConfig
       defaultZone: http://${eureka.instance.hostname}:8080/eureka/
     healthcheck:
       enabled: true
-    eurekaServiceUrlPollIntervalSeconds: 60
+    eureka-service-url-poll-interval-seconds: 60
     fetch-registry: false
-    registerWithEureka: false
+    register-with-eureka: false
 
 management:
   health:

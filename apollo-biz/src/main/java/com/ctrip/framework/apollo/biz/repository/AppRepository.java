@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ package com.ctrip.framework.apollo.biz.repository;
 import com.ctrip.framework.apollo.common.entity.App;
 
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface AppRepository extends PagingAndSortingRepository<App, Long> {
+public interface AppRepository extends JpaRepository<App, Long> {
 
   @Query("SELECT a from App a WHERE a.name LIKE %:name%")
   List<App> findByName(@Param("name") String name);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,14 @@
  */
 package com.ctrip.framework.apollo.common.controller;
 
-import com.ctrip.framework.apollo.Apollo;
+import com.ctrip.framework.apollo.common.constants.ApolloServer;
 import com.ctrip.framework.foundation.Foundation;
-
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(path = "/apollo")
 public class ApolloInfoController {
-
-  @RequestMapping("app")
-  public String getApp() {
-    return Foundation.app().toString();
-  }
 
   @RequestMapping("net")
   public String getNet() {
@@ -43,6 +37,6 @@ public class ApolloInfoController {
 
   @RequestMapping("version")
   public String getVersion() {
-    return Apollo.VERSION;
+    return ApolloServer.VERSION;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ public class AccessKeyDTO extends BaseDTO {
   private String secret;
 
   private String appId;
+
+  private Integer mode;
 
   private Boolean enabled;
 
@@ -48,6 +50,14 @@ public class AccessKeyDTO extends BaseDTO {
 
   public void setAppId(String appId) {
     this.appId = appId;
+  }
+
+  public Integer getMode() {
+    return mode;
+  }
+
+  public void setMode(Integer mode) {
+    this.mode = mode;
   }
 
   public Boolean getEnabled() {

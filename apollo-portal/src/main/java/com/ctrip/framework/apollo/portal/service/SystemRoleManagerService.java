@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@ package com.ctrip.framework.apollo.portal.service;
 import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
 import com.ctrip.framework.apollo.portal.constant.PermissionType;
 import com.ctrip.framework.apollo.portal.util.RoleUtils;
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -31,9 +30,15 @@ public class SystemRoleManagerService {
 
   public static final String SYSTEM_PERMISSION_TARGET_ID = "SystemRole";
 
-  public static final String CREATE_APPLICATION_ROLE_NAME = RoleUtils.buildCreateApplicationRoleName(PermissionType.CREATE_APPLICATION, SYSTEM_PERMISSION_TARGET_ID);
+  public static final String CREATE_APPLICATION_ROLE_NAME =
+      RoleUtils.buildCreateApplicationRoleName(PermissionType.CREATE_APPLICATION,
+          SYSTEM_PERMISSION_TARGET_ID);
 
-  public static final String CREATE_APPLICATION_LIMIT_SWITCH_KEY = "role.create-application.enabled";
+  public static final String MANAGE_USERS_ROLE_NAME =
+      RoleUtils.buildSystemRoleName(PermissionType.MANAGE_USERS, SYSTEM_PERMISSION_TARGET_ID);
+
+  public static final String CREATE_APPLICATION_LIMIT_SWITCH_KEY =
+      "role.create-application.enabled";
   public static final String MANAGE_APP_MASTER_LIMIT_SWITCH_KEY = "role.manage-app-master.enabled";
 
   private final RolePermissionService rolePermissionService;
@@ -42,10 +47,8 @@ public class SystemRoleManagerService {
 
   private final RoleInitializationService roleInitializationService;
 
-  @Autowired
   public SystemRoleManagerService(final RolePermissionService rolePermissionService,
-                                  final PortalConfig portalConfig,
-                                  final RoleInitializationService roleInitializationService) {
+      final PortalConfig portalConfig, final RoleInitializationService roleInitializationService) {
     this.rolePermissionService = rolePermissionService;
     this.portalConfig = portalConfig;
     this.roleInitializationService = roleInitializationService;
@@ -54,6 +57,7 @@ public class SystemRoleManagerService {
   @PostConstruct
   private void init() {
     roleInitializationService.initCreateAppRole();
+    roleInitializationService.initManageUsersRole();
   }
 
   private boolean isCreateApplicationPermissionEnabled() {
@@ -69,7 +73,13 @@ public class SystemRoleManagerService {
       return true;
     }
 
-    return rolePermissionService.userHasPermission(userId, PermissionType.CREATE_APPLICATION, SYSTEM_PERMISSION_TARGET_ID);
+    return rolePermissionService.userHasPermission(userId, PermissionType.CREATE_APPLICATION,
+        SYSTEM_PERMISSION_TARGET_ID);
+  }
+
+  public boolean hasManageUsersPermission(String userId) {
+    return rolePermissionService.userHasPermission(userId, PermissionType.MANAGE_USERS,
+        SYSTEM_PERMISSION_TARGET_ID);
   }
 
   public boolean hasManageAppMasterPermission(String userId, String appId) {

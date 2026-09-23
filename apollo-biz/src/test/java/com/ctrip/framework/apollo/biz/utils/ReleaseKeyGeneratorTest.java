@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,8 @@ import com.google.common.collect.Sets;
 import com.ctrip.framework.apollo.biz.MockBeanFactory;
 import com.ctrip.framework.apollo.biz.entity.Namespace;
 
+import java.util.List;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -37,7 +36,7 @@ import static org.junit.Assert.assertEquals;
  * @author Jason Song(song_s@ctrip.com)
  */
 public class ReleaseKeyGeneratorTest {
-  private static final Logger logger = LoggerFactory.getLogger(ReleaseKeyGeneratorTest.class);
+
   @Test
   public void testGenerateReleaseKey() throws Exception {
     String someAppId = "someAppId";
@@ -47,7 +46,8 @@ public class ReleaseKeyGeneratorTest {
     String anotherAppId = "anotherAppId";
 
     Namespace namespace = MockBeanFactory.mockNamespace(someAppId, someCluster, someNamespace);
-    Namespace anotherNamespace = MockBeanFactory.mockNamespace(anotherAppId, someCluster, someNamespace);
+    Namespace anotherNamespace =
+        MockBeanFactory.mockNamespace(anotherAppId, someCluster, someNamespace);
     int generateTimes = 50000;
     Set<String> releaseKeys = Sets.newConcurrentHashSet();
 
@@ -55,24 +55,41 @@ public class ReleaseKeyGeneratorTest {
     CountDownLatch latch = new CountDownLatch(1);
 
     executorService.submit(generateReleaseKeysTask(namespace, releaseKeys, generateTimes, latch));
-    executorService.submit(generateReleaseKeysTask(anotherNamespace, releaseKeys, generateTimes, latch));
+    executorService
+        .submit(generateReleaseKeysTask(anotherNamespace, releaseKeys, generateTimes, latch));
 
     latch.countDown();
 
     executorService.shutdown();
     executorService.awaitTermination(10, TimeUnit.SECONDS);
 
-    //make sure keys are unique
+    // make sure keys are unique
     assertEquals(generateTimes * 2, releaseKeys.size());
   }
 
+  @Test
+  public void testMessageToList() {
+    String message = "appId+cluster+namespace";
+    List<String> keys = ReleaseMessageKeyGenerator.messageToList(message);
+    assert keys != null;
+    assertEquals(3, keys.size());
+    assertEquals("appId", keys.get(0));
+    assertEquals("cluster", keys.get(1));
+    assertEquals("namespace", keys.get(2));
+
+    message = "appId+cluster";
+    keys = ReleaseMessageKeyGenerator.messageToList(message);
+    assert keys != null;
+    assertEquals(0, keys.size());
+  }
+
   private Runnable generateReleaseKeysTask(Namespace namespace, Set<String> releaseKeys,
-                                   int generateTimes, CountDownLatch latch) {
+      int generateTimes, CountDownLatch latch) {
     return () -> {
       try {
         latch.await();
       } catch (InterruptedException e) {
-        //ignore
+        // ignore
       }
       for (int i = 0; i < generateTimes; i++) {
         releaseKeys.add(ReleaseKeyGenerator.generateReleaseKey(namespace));

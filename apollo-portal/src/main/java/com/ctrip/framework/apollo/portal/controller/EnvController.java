@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @deprecated Portal UI uses /openapi/v1 endpoints. This legacy WebAPI controller is kept for
+ *     compatibility.
+ */
+@Deprecated
 @RestController
 @RequestMapping("/envs")
 public class EnvController {
@@ -38,7 +43,7 @@ public class EnvController {
   @GetMapping
   public List<String> envs() {
     List<String> environments = new ArrayList<>();
-    for(Env env : portalSettings.getActiveEnvs()) {
+    for (Env env : portalSettings.getActiveEnvs()) {
       environments.add(env.toString());
     }
     return environments;

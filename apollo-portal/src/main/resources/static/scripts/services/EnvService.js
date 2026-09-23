@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
  *
  */
 appService.service('EnvService', ['$resource', '$q', 'AppUtil', function ($resource, $q, AppUtil) {
-    var env_resource = $resource(AppUtil.prefixPath() + '/envs', {}, {
+    var env_resource = $resource(AppUtil.prefixPath() + '/openapi/v1/envs', {}, {
         find_all_envs:{
             method: 'GET',
             isArray: true,
-            url: AppUtil.prefixPath() + '/envs'
+            url: AppUtil.prefixPath() + '/openapi/v1/envs'
         }
     });
     return {

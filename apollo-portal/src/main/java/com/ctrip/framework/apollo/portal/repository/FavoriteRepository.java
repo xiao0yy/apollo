@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,15 @@ import com.ctrip.framework.apollo.portal.entity.po.Favorite;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface FavoriteRepository extends PagingAndSortingRepository<Favorite, Long> {
+public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
-  List<Favorite> findByUserIdOrderByPositionAscDataChangeCreatedTimeAsc(String userId, Pageable page);
+  List<Favorite> findByUserIdOrderByPositionAscDataChangeCreatedTimeAsc(String userId,
+      Pageable page);
 
   List<Favorite> findByAppIdOrderByPositionAscDataChangeCreatedTimeAsc(String appId, Pageable page);
 
@@ -36,6 +38,8 @@ public interface FavoriteRepository extends PagingAndSortingRepository<Favorite,
   Favorite findByUserIdAndAppId(String userId, String appId);
 
   @Modifying
-  @Query("UPDATE Favorite SET IsDeleted=1,DataChange_LastModifiedBy = ?2 WHERE AppId=?1")
-  int batchDeleteByAppId(String appId, String operator);
+  @Query("UPDATE Favorite SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE appId = :appId and isDeleted = false")
+  int batchDeleteByAppId(@Param("appId") String appId, @Param("operator") String operator);
 }

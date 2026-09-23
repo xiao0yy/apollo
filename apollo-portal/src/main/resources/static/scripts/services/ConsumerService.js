@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,27 @@ appService.service('ConsumerService', ['$resource', '$q', 'AppUtil',
         create_consumer: {
             method: 'POST',
             isArray: false,
-            url: AppUtil.prefixPath() + '/consumers'
+            url: AppUtil.prefixPath() + '/openapi/v1/consumers'
         },
         get_consumer_token_by_appId: {
             method: 'GET',
             isArray: false,
-            url: AppUtil.prefixPath() + '/consumers/by-appId'
+            url: AppUtil.prefixPath() + '/openapi/v1/consumer-tokens/by-appId'
         },
         assign_role_to_consumer: {
             method: 'POST',
             isArray: true,
-            url: AppUtil.prefixPath() + '/consumers/:token/assign-role'
+            url: AppUtil.prefixPath() + '/openapi/v1/consumers/:token/assign-role'
+        },
+        get_consumer_list: {
+            method: 'GET',
+            isArray: true,
+            url: AppUtil.prefixPath() + '/openapi/v1/consumers'
+        },
+        delete_consumer: {
+            method: 'DELETE',
+            isArray: false,
+            url: AppUtil.prefixPath() + '/openapi/v1/consumers/by-appId'
         }
 
     });
@@ -56,6 +66,21 @@ appService.service('ConsumerService', ['$resource', '$q', 'AppUtil',
                                     appId: appId,
                                     namespaceName: namespaceName
                                 }
+            )
+        },
+        getConsumerList: function (page, size){
+            return AppUtil.ajax(resource.get_consumer_list,
+                {
+                    page: page,
+                    size: size
+                }
+            )
+        },
+        deleteConsumer: function (appId){
+            return AppUtil.ajax(resource.delete_consumer,
+                {
+                    appId: appId
+                }
             )
         }
     }

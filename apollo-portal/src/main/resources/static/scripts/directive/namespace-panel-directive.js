@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,13 +60,26 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
             };
 
             var operate_branch_storage_key = 'OperateBranch';
+            var default_text_editor_min_lines = 10;
+            var default_text_editor_max_lines = 20;
+            var fullscreen_text_editor_min_lines = 25;
+            var text_editors = [];
+            var on_window_resize = function () {
+                refreshTextEditorLayout(scope.namespace.isTextFullscreen);
+            };
+            var fullscreen_change_events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange',
+                'MSFullscreenChange'];
 
             scope.refreshNamespace = refreshNamespace;
             scope.switchView = switchView;
             scope.toggleItemSearchInput = toggleItemSearchInput;
+            scope.toggleHistorySearchInput = toggleHistorySearchInput;
             scope.searchItems = searchItems;
+            scope.resetSearchItems = resetSearchItems;
+            scope.searchHistory = searchHistory;
             scope.loadCommitHistory = loadCommitHistory;
             scope.toggleTextEditStatus = toggleTextEditStatus;
+            scope.toggleTextFullscreen = toggleTextFullscreen;
             scope.goToSyncPage = goToSyncPage;
             scope.goToDiffPage = goToDiffPage;
             scope.modifyByText = modifyByText;
@@ -83,18 +96,162 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
             scope.mergeAndPublish = mergeAndPublish;
             scope.addRuleItem = addRuleItem;
             scope.editRuleItem = editRuleItem;
+            scope.formatContent = formatContent;
 
             scope.deleteNamespace = deleteNamespace;
+            scope.exportNamespace = exportNamespace;
+            scope.importNamespace = importNamespace;
 
             var subscriberId = EventManager.subscribe(EventManager.EventType.UPDATE_GRAY_RELEASE_RULES,
                 function (context) {
                     useRules(context.branch);
                 }, scope.namespace.baseInfo.namespaceName);
 
+            fullscreen_change_events.forEach(function (event_name) {
+                $window.document.addEventListener(event_name, syncFullscreenStatus);
+            });
+            $window.addEventListener('resize', on_window_resize);
+
             scope.$on('$destroy', function () {
                 EventManager.unsubscribe(EventManager.EventType.UPDATE_GRAY_RELEASE_RULES,
                     subscriberId, scope.namespace.baseInfo.namespaceName);
+
+                fullscreen_change_events.forEach(function (event_name) {
+                    $window.document.removeEventListener(event_name, syncFullscreenStatus);
+                });
+                $window.removeEventListener('resize', on_window_resize);
+
+                if (getFullscreenElement() == getTextEditorContainer(scope.namespace)) {
+                    exitFullscreen();
+                }
+
+                text_editors = [];
             });
+
+            function getTextEditorContainerId(namespace) {
+                if (!namespace || !namespace.id) {
+                    return '';
+                }
+                return 'namespaceTextEditor' + namespace.id;
+            }
+
+            function getTextEditorContainer(namespace) {
+                return $window.document.getElementById(getTextEditorContainerId(namespace));
+            }
+
+            function getFullscreenElement() {
+                return $window.document.fullscreenElement ||
+                    $window.document.webkitFullscreenElement ||
+                    $window.document.mozFullScreenElement ||
+                    $window.document.msFullscreenElement;
+            }
+
+            function requestFullscreen(element) {
+                var request_method = element.requestFullscreen ||
+                    element.webkitRequestFullscreen ||
+                    element.mozRequestFullScreen ||
+                    element.msRequestFullscreen;
+                if (!request_method) {
+                    return null;
+                }
+                return request_method.call(element);
+            }
+
+            function exitFullscreen() {
+                var exit_method = $window.document.exitFullscreen ||
+                    $window.document.webkitExitFullscreen ||
+                    $window.document.mozCancelFullScreen ||
+                    $window.document.msExitFullscreen;
+                if (!exit_method) {
+                    return null;
+                }
+                return exit_method.call($window.document);
+            }
+
+            function isElementVisible(element) {
+                return !!(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+            }
+
+            function getVisibleTextEditorCount(namespace) {
+                var text_editor_container = getTextEditorContainer(namespace);
+                if (!text_editor_container || !text_editor_container.querySelectorAll) {
+                    return 1;
+                }
+
+                var visible_editor_count = 0;
+                var ace_editors = text_editor_container.querySelectorAll('.ace_editor');
+                Array.prototype.forEach.call(ace_editors, function (ace_editor) {
+                    if (isElementVisible(ace_editor)) {
+                        visible_editor_count += 1;
+                    }
+                });
+                return visible_editor_count > 0 ? visible_editor_count : 1;
+            }
+
+            function getFullscreenTextEditorLines(editor) {
+                var line_height = editor && editor.renderer && editor.renderer.lineHeight ? editor.renderer.lineHeight : 16;
+                var visible_editor_count = getVisibleTextEditorCount(scope.namespace);
+                var text_editor_container = getTextEditorContainer(scope.namespace);
+                var available_height = $window.innerHeight;
+                if (text_editor_container && text_editor_container.clientHeight) {
+                    available_height = text_editor_container.clientHeight;
+                }
+                available_height = Math.max(400, available_height - 24);
+                var lines_per_editor = Math.floor(available_height / visible_editor_count / line_height);
+                return Math.max(fullscreen_text_editor_min_lines, lines_per_editor);
+            }
+
+            function applyTextEditorLayout(editor, is_text_fullscreen) {
+                if (!editor || !editor.setOptions) {
+                    return;
+                }
+
+                var current_fullscreen_status = scope.namespace.isTextFullscreen;
+                if (typeof is_text_fullscreen == 'boolean') {
+                    current_fullscreen_status = is_text_fullscreen;
+                }
+                var min_lines = default_text_editor_min_lines;
+                var max_lines = default_text_editor_max_lines;
+                if (current_fullscreen_status) {
+                    min_lines = getFullscreenTextEditorLines(editor);
+                    max_lines = min_lines;
+                }
+
+                editor.setOptions({
+                    fontSize: 13,
+                    minLines: min_lines,
+                    maxLines: max_lines
+                });
+                editor.resize(true);
+            }
+
+            function refreshTextEditorLayout(is_text_fullscreen) {
+                text_editors.forEach(function (editor) {
+                    applyTextEditorLayout(editor, is_text_fullscreen);
+                });
+            }
+
+            function syncFullscreenStatus() {
+                if (scope.$$destroyed) {
+                    return;
+                }
+                var is_current_namespace_fullscreen = getFullscreenElement() == getTextEditorContainer(scope.namespace);
+                if (scope.namespace.isTextFullscreen !== is_current_namespace_fullscreen) {
+                    if (scope.$$phase) {
+                        scope.namespace.isTextFullscreen = is_current_namespace_fullscreen;
+                    } else {
+                        scope.$applyAsync(function () {
+                            scope.namespace.isTextFullscreen = is_current_namespace_fullscreen;
+                        });
+                    }
+                }
+                refreshTextEditorLayout(is_current_namespace_fullscreen);
+                if (is_current_namespace_fullscreen) {
+                    $window.setTimeout(function () {
+                        refreshTextEditorLayout(true);
+                    }, 50);
+                }
+            }
 
             preInit(scope.namespace);
 
@@ -128,14 +285,18 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 namespace.isBranch = false;
                 namespace.displayControl = {
                     currentOperateBranch: 'master',
-                    showSearchInput: false,
+                    showSearchInput: namespace.showSearchItemInput,
+                    searchItemKey: namespace.searchItemKey,
+                    showHistorySearchInput: false,
                     show: scope.showBody
                 };
                 scope.showNamespaceBody = namespace.showNamespaceBody ? true : scope.showBody;
                 namespace.viewItems = namespace.items;
                 namespace.isPropertiesFormat = namespace.format == 'properties';
-                namespace.isSyntaxCheckable = namespace.format == 'yaml' || namespace.format == 'yml';
+                namespace.isSyntaxCheckable = namespace.format == 'yaml' || namespace.format == 'yml'
+                    || namespace.format == 'json';
                 namespace.isTextEditing = false;
+                namespace.isTextFullscreen = false;
                 namespace.instanceViewType = namespace_instance_view_type.LATEST_RELEASE;
                 namespace.latestReleaseInstancesPage = 0;
                 namespace.allInstances = [];
@@ -150,6 +311,7 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 initPermission(namespace);
                 initLinkedNamespace(namespace);
                 loadInstanceInfo(namespace);
+                initSearchItemInput(namespace);
 
                 function initNamespaceBranch(namespace) {
                     NamespaceBranchService.findNamespaceBranch(scope.appId, scope.env,
@@ -268,20 +430,33 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                                 )
                                     .then(function (result) {
                                         //branch has same permission
-                                        namespace.hasModifyPermission = result.hasPermission;
+                                        namespace.hasModifyPermission = namespace.hasModifyPermission || result.hasPermission;
                                         if (namespace.branch) {
-                                            namespace.branch.hasModifyPermission = result.hasPermission;
+                                            namespace.branch.hasModifyPermission = namespace.branch.hasModifyPermission || result.hasPermission;
                                         }
                                     });
                             }
                             else {
                                 //branch has same permission
-                                namespace.hasModifyPermission = result.hasPermission;
+                                namespace.hasModifyPermission = namespace.hasModifyPermission || result.hasPermission;
                                 if (namespace.branch) {
-                                    namespace.branch.hasModifyPermission = result.hasPermission;
+                                    namespace.branch.hasModifyPermission = namespace.branch.hasModifyPermission || result.hasPermission;
                                 }
                             }
                         });
+
+                    PermissionService.has_modify_cluster_ns_permission(
+                        scope.appId,
+                        scope.env,
+                        scope.cluster
+                    ).then(function (result) {
+                        if (result.hasPermission) {
+                            namespace.hasModifyPermission = namespace.hasModifyPermission || result.hasPermission;
+                            if (namespace.branch) {
+                                namespace.branch.hasModifyPermission = namespace.branch.hasModifyPermission || result.hasPermission;
+                            }
+                        }
+                    });
 
                     PermissionService.has_release_namespace_permission(
                         scope.appId,
@@ -295,24 +470,38 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                                 )
                                     .then(function (result) {
                                         //branch has same permission
-                                        namespace.hasReleasePermission = result.hasPermission;
+                                        namespace.hasReleasePermission ||= result.hasPermission;
                                         if (namespace.branch) {
-                                            namespace.branch.hasReleasePermission = result.hasPermission;
+                                            namespace.branch.hasReleasePermission ||= result.hasPermission;
                                         }
                                     });
                             }
                             else {
                                 //branch has same permission
-                                namespace.hasReleasePermission = result.hasPermission;
+                                namespace.hasReleasePermission ||= result.hasPermission;
                                 if (namespace.branch) {
-                                    namespace.branch.hasReleasePermission = result.hasPermission;
+                                    namespace.branch.hasReleasePermission ||= result.hasPermission;
                                 }
                             }
                         });
+
+                    PermissionService.has_release_cluster_ns_permission(
+                        scope.appId,
+                        scope.env,
+                        scope.cluster
+                    ).then(function (result) {
+                        if (result.hasPermission) {
+                            namespace.hasReleasePermission ||= result.hasPermission;
+                            if (namespace.branch) {
+                                namespace.branch.hasReleasePermission ||= result.hasPermission;
+                            }
+                        }
+                    });
+
                 }
 
                 function initLinkedNamespace(namespace) {
-                    if (!namespace.isPublic || !namespace.isLinkedNamespace || namespace.format != 'properties') {
+                    if (!namespace.isPublic || !namespace.isLinkedNamespace) {
                         return;
                     }
                     //load public namespace
@@ -344,9 +533,16 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                                     publicNamespace.hasPublishedItem = true;
                                 }
                             });
-
+                            publicNamespace.isPropertiesFormat = publicNamespace.format == 'properties';
+                            loadParentNamespaceText(namespace);
                         });
+                }
 
+                function loadParentNamespaceText(namespace){
+                    namespace.publicNamespaceText = "";
+                    if(namespace.isLinkedNamespace) {
+                        namespace.publicNamespaceText = parseModel2Text(namespace.publicNamespace)
+                    }
                 }
 
                 function initNamespaceViewName(namespace) {
@@ -389,6 +585,12 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
 
                 }
 
+                function initSearchItemInput(namespace) {
+                    if (namespace.displayControl.searchItemKey) {
+                        namespace.searchKey = namespace.displayControl.searchItemKey;
+                        searchItems(namespace);
+                    }
+                }
             }
 
             function initNamespaceInstancesCount(namespace) {
@@ -438,6 +640,9 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
             }
 
             function switchView(namespace, viewType) {
+                if (viewType != namespace_view_type.TEXT && getFullscreenElement() == getTextEditorContainer(namespace)) {
+                    exitFullscreen();
+                }
                 namespace.viewType = viewType;
                 if (namespace_view_type.TEXT == viewType) {
                     namespace.text = parseModel2Text(namespace);
@@ -466,6 +671,7 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                     scope.env,
                     namespace.baseInfo.clusterName,
                     namespace.baseInfo.namespaceName,
+                    namespace.HistorySearchKey,
                     namespace.commitPage,
                     size)
                     .then(function (result) {
@@ -636,6 +842,8 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                     clientAppId: !branch.parentNamespace.isPublic ? branch.baseInfo.appId : '',
                     clientIpList: [],
                     draftIpList: [],
+                    clientLabelList: [],
+                    draftLabelList: [],
                     isNew: true
                 };
 
@@ -648,7 +856,8 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
 
             function editRuleItem(branch, ruleItem) {
                 ruleItem.isNew = false;
-                ruleItem.draftIpList = _.clone(ruleItem.clientIpList);
+                ruleItem.draftIpList = _.clone(ruleItem.clientIpList) || [];
+                ruleItem.draftLabelList = _.clone(ruleItem.clientLabelList) || [];
                 branch.editingRuleItem = ruleItem;
 
                 EventManager.emit(EventManager.EventType.EDIT_GRAY_RELEASE_RULES, {
@@ -698,14 +907,51 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 }
                 namespace.isTextEditing = !namespace.isTextEditing;
                 if (namespace.isTextEditing) {//切换为编辑状态
-                    namespace.commited = false;
+                    namespace.committed = false;
                     namespace.backupText = namespace.text;
                     namespace.editText = parseModel2Text(namespace);
 
                 } else {
-                    if (!namespace.commited) {//取消编辑,则复原
+                    if (!namespace.committed) {//取消编辑,则复原
                         namespace.text = namespace.backupText;
                     }
+                }
+            }
+
+            function toggleTextFullscreen(namespace) {
+                var text_editor_container = getTextEditorContainer(namespace);
+                if (!text_editor_container) {
+                    return;
+                }
+
+                var fullscreen_request;
+                if (getFullscreenElement() == text_editor_container) {
+                    fullscreen_request = exitFullscreen();
+                } else {
+                    fullscreen_request = requestFullscreen(text_editor_container);
+                }
+
+                if (fullscreen_request && typeof fullscreen_request.catch == 'function') {
+                    fullscreen_request.catch(function () {
+                        syncFullscreenStatus();
+                    });
+                }
+
+                setTimeout(syncFullscreenStatus, 0);
+            }
+
+            // 格式化
+            function formatContent(namespace) {
+                try {
+                    if (namespace.format === 'json') {
+                        if (AppUtil.hasDuplicateKeys(namespace.editText)) {
+                            toastr.warning($translate.instant('ApolloNsPanel.JsonDuplicateKeyWarning'));
+                            return;
+                        }
+                        namespace.editText = JSON.stringify(JSON.parse(namespace.editText), null, 4);
+                    }
+                } catch (e) {
+                    toastr.error('format content failed: ' + e.message);
                 }
             }
 
@@ -729,6 +975,7 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
             }
 
             function modifyByText(namespace) {
+
                 var model = {
                     configText: namespace.editText,
                     namespaceId: namespace.baseInfo.id,
@@ -760,7 +1007,7 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                             return false;
                         }
                     );
-                namespace.commited = true;
+                namespace.committed = true;
             }
 
             function syntaxCheck(namespace) {
@@ -791,7 +1038,6 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
             }
 
             function parseModel2Text(namespace) {
-
                 if (namespace.items.length == 0) {
                     namespace.itemCnt = 0;
                     return "";
@@ -818,7 +1064,7 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 var itemCnt = 0;
                 namespace.items.forEach(function (item) {
                     //deleted key
-                    if (!item.item.dataChangeLastModifiedBy) {
+                    if (item.isDeleted) {
                         return;
                     }
                     if (item.item.key) {
@@ -853,9 +1099,45 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 namespace.viewItems = items;
             }
 
+            function resetSearchItems(namespace) {
+                namespace.searchKey = '';
+                searchItems(namespace);
+            }
+
+            function toggleHistorySearchInput(namespace) {
+                namespace.displayControl.showHistorySearchInput = !namespace.displayControl.showHistorySearchInput;
+            }
+
+            function searchHistory(namespace) {
+                namespace.commits = [];
+                namespace.commitPage = 0;
+                namespace.hasLoadAllCommit = false;
+                var size = 10;
+                CommitService.find_commits(scope.appId,
+                    scope.env,
+                    namespace.baseInfo.clusterName,
+                    namespace.baseInfo.namespaceName,
+                    namespace.HistorySearchKey,
+                    namespace.commitPage,
+                    size)
+                    .then(function (result) {
+                        if (result.length < size) {
+                            namespace.hasLoadAllCommit = true;
+                        }
+
+                        for (var i = 0; i < result.length; i++) {
+                            //to json
+                            result[i].changeSets = JSON.parse(result[i].changeSets);
+                            namespace.commits.push(result[i]);
+                        }
+                        namespace.commitPage++
+                    }, function (result) {
+                        toastr.error(AppUtil.errorMsg(result), $translate.instant('ApolloNsPanel.LoadingHistoryError'));
+                    });
+            }
+
             //normal release and gray release
             function publish(namespace) {
-
                 if (!namespace.hasReleasePermission) {
                     AppUtil.showModal('#releaseNoPermissionDialog');
                     return;
@@ -902,19 +1184,35 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
                 EventManager.emit(EventManager.EventType.PRE_DELETE_NAMESPACE, { namespace: namespace });
             }
 
+            function exportNamespace(namespace) {
+                $window.location.href =
+                    AppUtil.prefixPath() + '/openapi/v1/apps/' + scope.appId + "/envs/" + scope.env + "/clusters/" + scope.cluster
+                    + "/namespaces/" + namespace.baseInfo.namespaceName + "/items/export"
+            }
+
+            function importNamespace(namespace) {
+                EventManager.emit(EventManager.EventType.PRE_IMPORT_NAMESPACE, { namespace: namespace });
+            }
+
             //theme: https://github.com/ajaxorg/ace-builds/tree/ba3b91e04a5aa559d56ac70964f9054baa0f4caf/src-min
             scope.aceConfig = {
                 $blockScrolling: Infinity,
                 showPrintMargin: false,
                 theme: 'eclipse',
                 mode: scope.namespace.format === 'yml' ? 'yaml' : (scope.namespace.format === 'txt' ? undefined : scope.namespace.format),
+                require: ['ace/ext/searchbox'],
                 onLoad: function (_editor) {
                     _editor.$blockScrolling = Infinity;
-                    _editor.setOptions({
-                        fontSize: 13,
-                        minLines: 10,
-                        maxLines: 20
-                    })
+                    if (text_editors.indexOf(_editor) < 0) {
+                        text_editors.push(_editor);
+                    }
+                    applyTextEditorLayout(_editor);
+                },
+                onChange: function (e) {
+                    if ((e[0].action === 'insert') && (scope.namespace.hasOwnProperty("editText"))) {
+                        scope.namespace.editText = e[1].session.getValue();
+                    }
+
                 }
             };
 
@@ -926,4 +1224,3 @@ function directive($window, $translate, toastr, AppUtil, EventManager, Permissio
         }
     }
 }
-

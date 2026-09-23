@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,22 +22,36 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
 
     var $orgWidget = $('#organization');
 
-    $scope.consumer = {};
+    $scope.consumer = defaultConsumer();
     $scope.consumerRole = {
         type: 'NamespaceRole'
     };
 
     $scope.submitBtnDisabled = false;
     $scope.userSelectWidgetId = 'toAssignMasterRoleUser';
+    $scope.consumerListPage = 0;
+    $scope.consumerList = [];
+    $scope.hasMoreconsumerList = false;
+    $scope.toOperationConsumer={}
 
     $scope.getTokenByAppId = getTokenByAppId;
     $scope.createConsumer = createConsumer;
     $scope.assignRoleToConsumer = assignRoleToConsumer;
+    $scope.getConsumerList = getConsumerList;
+    $scope.preDeleteConsumer = preDeleteConsumer;
+    $scope.deleteConsumer = deleteConsumer;
+    $scope.preGrantPermission = preGrantPermission;
+    $scope.toggleRateLimitEnabledInput = function() {
+        if (!$scope.consumer.rateLimitEnabled) {
+            $scope.consumer.rateLimit = 0;
+        }
+    };
 
     function init() {
         initOrganization();
         initPermission();
         initEnv();
+        getConsumerList();
     }
 
     function initOrganization() {
@@ -58,6 +72,41 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
         }, function (result) {
             toastr.error(AppUtil.errorMsg(result), "load organizations error");
         });
+    }
+
+    function getConsumerList() {
+        var size = 10;
+        ConsumerService.getConsumerList($scope.consumerListPage, size)
+        .then(function (result) {
+            $scope.consumerListPage += 1;
+            $scope.hasMoreconsumerList = result.length === size;
+
+            if (!result || result.length === 0) {
+                return;
+            }
+            result.forEach(function (app) {
+                $scope.consumerList.push(app);
+            });
+
+        })
+    }
+
+    let toDeleteAppId = '';
+
+    function preDeleteConsumer(app) {
+        $scope.toOperationConsumer = app;
+        toDeleteAppId = app.appId;
+        $("#deleteConsumerDialog").modal("show");
+    }
+
+    function deleteConsumer(){
+        ConsumerService.deleteConsumer(toDeleteAppId)
+        .then(function () {
+            toastr.success($translate.instant('Open.Manage.DeleteConsumer.Success'));
+            $scope.consumerList = $scope.consumerList.filter(consumer => consumer.appId !== toDeleteAppId);
+        },function (error) {
+            toastr.error(AppUtil.errorMsg(error), $translate.instant('Open.Manage.DeleteConsumer.Error'));
+        })
     }
 
     function initPermission() {
@@ -106,6 +155,8 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
                         token: $translate.instant('Open.Manage.AppNotCreated', { appId: $scope.consumer.appId })
                     };
                 }
+            }, function (response) {
+                AppUtil.showErrorMsg(response);
             });
     }
 
@@ -114,12 +165,25 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
 
         if (!$scope.consumer.appId) {
             toastr.warning($translate.instant('Open.Manage.PleaseEnterAppId'));
+            $scope.submitBtnDisabled = false;
             return;
         }
+
+        if ($scope.consumer.rateLimitEnabled) {
+            if (!$scope.consumer.rateLimit || $scope.consumer.rateLimit < 1) {
+                toastr.warning($translate.instant('Open.Manage.Consumer.RateLimitValue.Error'));
+                $scope.submitBtnDisabled = false;
+                return;
+            }
+        } else {
+            $scope.consumer.rateLimit = 0;
+        }
+
         var selectedOrg = $orgWidget.select2('data')[0];
 
         if (!selectedOrg.id) {
             toastr.warning($translate.instant('Common.PleaseChooseDepartment'));
+            $scope.submitBtnDisabled = false;
             return;
         }
 
@@ -130,6 +194,7 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
         var owner = $('.ownerSelector').select2('data')[0];
         if (!owner) {
             toastr.warning($translate.instant('Common.PleaseChooseOwner'));
+            $scope.submitBtnDisabled = false;
             return;
         }
         $scope.consumer.ownerName = owner.id;
@@ -140,12 +205,18 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
                 $scope.consumerToken = consumerToken;
                 $scope.consumerRole.token = consumerToken.token;
                 $scope.submitBtnDisabled = false;
-                $scope.consumer = {};
+                $scope.consumer = defaultConsumer();
             }, function (response) {
                 AppUtil.showErrorMsg(response, $translate.instant('Common.CreateFailed'));
                 $scope.submitBtnDisabled = false;
             })
 
+    }
+
+    function preGrantPermission(app){
+        $scope.consumer.appId = app.appId;
+        getTokenByAppId();
+        AppUtil.showModal('#grantPermissionModal');
     }
 
     function assignRoleToConsumer() {
@@ -159,6 +230,15 @@ function OpenManageController($scope, $translate, toastr, AppUtil, OrganizationS
             }, function (response) {
                 AppUtil.showErrorMsg(response, $translate.instant('Open.Manage.GrantFailed'));
             })
+    }
+
+    function defaultConsumer() {
+        return {
+            allowCreateApplication: false,
+            allowManageUsers: false,
+            rateLimitEnabled: false,
+            rateLimit: 0
+        };
     }
 
     init();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,184 +18,335 @@ package com.ctrip.framework.apollo.openapi.v1.controller;
 
 import com.ctrip.framework.apollo.common.dto.ReleaseDTO;
 import com.ctrip.framework.apollo.common.exception.BadRequestException;
-import com.ctrip.framework.apollo.common.utils.BeanUtils;
+import com.ctrip.framework.apollo.common.exception.NotFoundException;
 import com.ctrip.framework.apollo.common.utils.RequestPrecondition;
-import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.core.utils.StringUtils;
-import com.ctrip.framework.apollo.openapi.auth.ConsumerPermissionValidator;
-import com.ctrip.framework.apollo.openapi.dto.NamespaceGrayDelReleaseDTO;
-import com.ctrip.framework.apollo.openapi.dto.NamespaceReleaseDTO;
-import com.ctrip.framework.apollo.openapi.dto.OpenReleaseDTO;
-import com.ctrip.framework.apollo.openapi.util.OpenApiBeanUtils;
+import com.ctrip.framework.apollo.openapi.api.ReleaseManagementApi;
+import com.ctrip.framework.apollo.openapi.model.NamespaceGrayDelReleaseDTO;
+import com.ctrip.framework.apollo.openapi.model.NamespaceReleaseDTO;
+import com.ctrip.framework.apollo.openapi.model.OpenReleaseDTO;
+import com.ctrip.framework.apollo.openapi.model.OpenReleaseDiffDTO;
+import com.ctrip.framework.apollo.openapi.util.OpenApiModelConverters;
+import com.ctrip.framework.apollo.portal.component.UnifiedPermissionValidator;
+import com.ctrip.framework.apollo.portal.component.UserIdentityContextHolder;
+import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
+import com.ctrip.framework.apollo.portal.constant.UserIdentityConstants;
+import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
 import com.ctrip.framework.apollo.portal.entity.model.NamespaceGrayDelReleaseModel;
 import com.ctrip.framework.apollo.portal.entity.model.NamespaceReleaseModel;
+import com.ctrip.framework.apollo.portal.environment.Env;
+import com.ctrip.framework.apollo.portal.listener.ConfigPublishEvent;
 import com.ctrip.framework.apollo.portal.service.NamespaceBranchService;
 import com.ctrip.framework.apollo.portal.service.ReleaseService;
+import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
 import com.ctrip.framework.apollo.portal.spi.UserService;
-import javax.servlet.http.HttpServletRequest;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
+@Validated
 @RestController("openapiReleaseController")
-@RequestMapping("/openapi/v1/envs/{env}")
-public class ReleaseController {
+public class ReleaseController implements ReleaseManagementApi {
+
+  private static final int DEFAULT_PAGE = 0;
+  private static final int DEFAULT_RELEASE_PAGE_SIZE = 5;
 
   private final ReleaseService releaseService;
   private final UserService userService;
   private final NamespaceBranchService namespaceBranchService;
-  private final ConsumerPermissionValidator consumerPermissionValidator;
+  private final UnifiedPermissionValidator unifiedPermissionValidator;
+  private final PortalConfig portalConfig;
+  private final UserInfoHolder userInfoHolder;
+  private final ApplicationEventPublisher publisher;
 
-  public ReleaseController(
-      final ReleaseService releaseService,
-      final UserService userService,
+  public ReleaseController(final ReleaseService releaseService, final UserService userService,
       final NamespaceBranchService namespaceBranchService,
-      final ConsumerPermissionValidator consumerPermissionValidator) {
+      final UnifiedPermissionValidator unifiedPermissionValidator, final PortalConfig portalConfig,
+      final UserInfoHolder userInfoHolder, final ApplicationEventPublisher publisher) {
     this.releaseService = releaseService;
     this.userService = userService;
     this.namespaceBranchService = namespaceBranchService;
-    this.consumerPermissionValidator = consumerPermissionValidator;
+    this.unifiedPermissionValidator = unifiedPermissionValidator;
+    this.portalConfig = portalConfig;
+    this.userInfoHolder = userInfoHolder;
+    this.publisher = publisher;
   }
 
-  @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
-  @PostMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases")
-  public OpenReleaseDTO createRelease(@PathVariable String appId, @PathVariable String env,
-                                      @PathVariable String clusterName,
-                                      @PathVariable String namespaceName,
-                                      @RequestBody NamespaceReleaseDTO model,
-                                      HttpServletRequest request) {
-    RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(model.getReleasedBy(), model
-            .getReleaseTitle()),
-        "Params(releaseTitle and releasedBy) can not be empty");
+  @Override
+  public ResponseEntity<OpenReleaseDiffDTO> compareRelease(String env, Long baseReleaseId,
+      Long toCompareReleaseId) {
+    Env targetEnv = Env.valueOf(env);
+    ReleaseDTO baseRelease = findReleaseForCompareOrThrow(targetEnv, baseReleaseId);
+    ReleaseDTO toCompareRelease = findReleaseForCompareOrThrow(targetEnv, toCompareReleaseId);
+    checkReleaseReadAllowed(env, baseRelease);
+    checkReleaseReadAllowed(env, toCompareRelease);
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseCompareResult(
+        releaseService.compare(targetEnv, baseReleaseId, toCompareReleaseId)));
+  }
 
-    if (userService.findByUserId(model.getReleasedBy()) == null) {
-      throw new BadRequestException("user(releaseBy) not exists");
+  @PreAuthorize(
+      value = "@unifiedPermissionValidator.hasReleaseNamespacePermission(#appId, #env, #clusterName, #namespaceName)")
+  @Override
+  public ResponseEntity<OpenReleaseDTO> createGrayDelRelease(String appId, String env,
+      String clusterName, String namespaceName, String branchName,
+      NamespaceGrayDelReleaseDTO namespaceGrayDelReleaseDTO, String operator) {
+    RequestPrecondition.checkArguments(namespaceGrayDelReleaseDTO != null,
+        "release payload can not be empty");
+    RequestPrecondition.checkArguments(
+        !StringUtils.isContainEmpty(namespaceGrayDelReleaseDTO.getReleaseTitle()),
+        "Params(releaseTitle) can not be empty");
+    RequestPrecondition.checkArguments(namespaceGrayDelReleaseDTO.getGrayDelKeys() != null,
+        "Params(grayDelKeys) can not be null");
+
+    String resolvedOperator = resolveOperator(operator, namespaceGrayDelReleaseDTO.getReleasedBy());
+    boolean emergencyPublish =
+        Boolean.TRUE.equals(namespaceGrayDelReleaseDTO.getIsEmergencyPublish());
+    checkEmergencyPublishAllowedForUser(env, emergencyPublish);
+
+    NamespaceGrayDelReleaseModel releaseModel = new NamespaceGrayDelReleaseModel();
+    releaseModel.setAppId(appId);
+    releaseModel.setEnv(env);
+    releaseModel.setClusterName(branchName);
+    releaseModel.setNamespaceName(namespaceName);
+    releaseModel.setReleaseTitle(namespaceGrayDelReleaseDTO.getReleaseTitle());
+    releaseModel.setReleaseComment(namespaceGrayDelReleaseDTO.getReleaseComment());
+    releaseModel.setReleasedBy(resolvedOperator);
+    releaseModel.setEmergencyPublish(emergencyPublish);
+    releaseModel.setGrayDelKeys(new HashSet<>(namespaceGrayDelReleaseDTO.getGrayDelKeys()));
+
+    ReleaseDTO createdRelease = releaseService.publish(releaseModel, resolvedOperator);
+    publishEvent(appId, clusterName, namespaceName, createdRelease.getId(), Env.valueOf(env),
+        PublishEventType.GRAY);
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseDTO(createdRelease));
+  }
+
+  @PreAuthorize(
+      value = "@unifiedPermissionValidator.hasReleaseNamespacePermission(#appId, #env, #clusterName, #namespaceName)")
+  @Override
+  public ResponseEntity<OpenReleaseDTO> createGrayRelease(String appId, String env,
+      String clusterName, String namespaceName, String branchName,
+      NamespaceReleaseDTO namespaceReleaseDTO, String operator) {
+    NamespaceReleaseModel releaseModel = toReleaseModel(appId, env, branchName, namespaceName,
+        namespaceReleaseDTO, resolveOperator(operator, payloadReleasedBy(namespaceReleaseDTO)));
+    checkEmergencyPublishAllowedForUser(env, releaseModel.isEmergencyPublish());
+
+    ReleaseDTO createdRelease = releaseService.publish(releaseModel);
+    publishEvent(appId, clusterName, namespaceName, createdRelease.getId(), Env.valueOf(env),
+        PublishEventType.GRAY);
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseDTO(createdRelease));
+  }
+
+  @PreAuthorize(
+      value = "@unifiedPermissionValidator.hasReleaseNamespacePermission(#appId, #env, #clusterName, #namespaceName)")
+  @Override
+  public ResponseEntity<OpenReleaseDTO> createRelease(String appId, String env, String clusterName,
+      String namespaceName, NamespaceReleaseDTO namespaceReleaseDTO, String operator) {
+    NamespaceReleaseModel releaseModel = toReleaseModel(appId, env, clusterName, namespaceName,
+        namespaceReleaseDTO, resolveOperator(operator, payloadReleasedBy(namespaceReleaseDTO)));
+    checkEmergencyPublishAllowedForUser(env, releaseModel.isEmergencyPublish());
+
+    ReleaseDTO createdRelease = releaseService.publish(releaseModel);
+    publishEvent(appId, clusterName, namespaceName, createdRelease.getId(), Env.valueOf(env),
+        PublishEventType.NORMAL);
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseDTO(createdRelease));
+  }
+
+  @Override
+  public ResponseEntity<List<OpenReleaseDTO>> findActiveReleases(String appId, String env,
+      String clusterName, String namespaceName, Integer page, Integer size) {
+    if (shouldHideConfigToPortalUser(appId, env, clusterName, namespaceName)) {
+      return ResponseEntity.ok(Collections.emptyList());
+    }
+    checkReleaseNamespaceReadAllowed(appId, env, clusterName, namespaceName);
+    return ResponseEntity.ok(OpenApiModelConverters
+        .fromReleaseDTOs(releaseService.findActiveReleases(appId, Env.valueOf(env), clusterName,
+            namespaceName, resolvePage(page), resolvePageSize(size, DEFAULT_RELEASE_PAGE_SIZE))));
+  }
+
+  @Override
+  public ResponseEntity<OpenReleaseDTO> getReleaseById(String env, Long releaseId) {
+    ReleaseDTO release = findReleaseOrThrow(Env.valueOf(env), releaseId);
+    checkReleaseReadAllowed(env, release);
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseDTO(release));
+  }
+
+  @Override
+  public ResponseEntity<OpenReleaseDTO> loadLatestActiveRelease(String appId, String env,
+      String clusterName, String namespaceName) {
+    if (shouldHideConfigToPortalUser(appId, env, clusterName, namespaceName)) {
+      return ResponseEntity.ok().build();
+    }
+    checkReleaseNamespaceReadAllowed(appId, env, clusterName, namespaceName);
+    ReleaseDTO release =
+        releaseService.loadLatestRelease(appId, Env.valueOf(env), clusterName, namespaceName);
+    if (release == null) {
+      return ResponseEntity.ok().build();
+    }
+    return ResponseEntity.ok(OpenApiModelConverters.fromReleaseDTO(release));
+  }
+
+  @Override
+  public ResponseEntity<Void> rollback(String env, Long releaseId, String operator,
+      Long toReleaseId) {
+    ReleaseDTO release = releaseService.findReleaseById(Env.valueOf(env), releaseId);
+    if (release == null) {
+      throw NotFoundException.releaseNotFound(releaseId);
+    }
+    String resolvedOperator = resolveOperator(operator, null);
+
+    if (!unifiedPermissionValidator.hasReleaseNamespacePermission(release.getAppId(), env,
+        release.getClusterName(), release.getNamespaceName())) {
+      throw new AccessDeniedException("Access is denied");
     }
 
-    NamespaceReleaseModel releaseModel = BeanUtils.transform(NamespaceReleaseModel.class, model);
+    if (toReleaseId != null && toReleaseId > -1) {
+      releaseService.rollbackTo(Env.valueOf(env), releaseId, toReleaseId, resolvedOperator);
+    } else {
+      releaseService.rollback(Env.valueOf(env), releaseId, resolvedOperator);
+    }
 
+    ConfigPublishEvent event = ConfigPublishEvent.instance();
+    event.withAppId(release.getAppId()).withCluster(release.getClusterName())
+        .withNamespace(release.getNamespaceName()).withPreviousReleaseId(releaseId)
+        .setRollbackEvent(true).setEnv(Env.valueOf(env));
+    publisher.publishEvent(event);
+    return ResponseEntity.ok().build();
+  }
+
+  private NamespaceReleaseModel toReleaseModel(String appId, String env, String clusterName,
+      String namespaceName, NamespaceReleaseDTO releaseDTO, String releasedBy) {
+    RequestPrecondition.checkArguments(releaseDTO != null, "release payload can not be empty");
+    RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(releaseDTO.getReleaseTitle()),
+        "Params(releaseTitle) can not be empty");
+
+    NamespaceReleaseModel releaseModel = new NamespaceReleaseModel();
     releaseModel.setAppId(appId);
-    releaseModel.setEnv(Env.valueOf(env).toString());
+    releaseModel.setEnv(env);
     releaseModel.setClusterName(clusterName);
     releaseModel.setNamespaceName(namespaceName);
-
-    return OpenApiBeanUtils.transformFromReleaseDTO(releaseService.publish(releaseModel));
+    releaseModel.setReleaseTitle(releaseDTO.getReleaseTitle());
+    releaseModel.setReleaseComment(releaseDTO.getReleaseComment());
+    releaseModel.setReleasedBy(releasedBy);
+    releaseModel.setEmergencyPublish(Boolean.TRUE.equals(releaseDTO.getIsEmergencyPublish()));
+    return releaseModel;
   }
 
-  @GetMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases/latest")
-  public OpenReleaseDTO loadLatestActiveRelease(@PathVariable String appId, @PathVariable String env,
-                                                @PathVariable String clusterName, @PathVariable
-                                                    String namespaceName) {
-    ReleaseDTO releaseDTO = releaseService.loadLatestRelease(appId, Env.valueOf
-        (env), clusterName, namespaceName);
-    if (releaseDTO == null) {
-      return null;
-    }
-
-    return OpenApiBeanUtils.transformFromReleaseDTO(releaseDTO);
+  private String payloadReleasedBy(NamespaceReleaseDTO releaseDTO) {
+    return releaseDTO == null ? null : releaseDTO.getReleasedBy();
   }
 
-    @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
-    @PostMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/branches/{branchName}/merge")
-    public OpenReleaseDTO merge(@PathVariable String appId, @PathVariable String env,
-                            @PathVariable String clusterName, @PathVariable String namespaceName,
-                            @PathVariable String branchName, @RequestParam(value = "deleteBranch", defaultValue = "true") boolean deleteBranch,
-                            @RequestBody NamespaceReleaseDTO model, HttpServletRequest request) {
-        RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(model.getReleasedBy(), model
-                        .getReleaseTitle()),
-                "Params(releaseTitle and releasedBy) can not be empty");
+  private void checkEmergencyPublishAllowedForUser(String env, boolean emergencyPublish) {
+    String authType = UserIdentityContextHolder.getAuthType();
+    if (emergencyPublish
+        && (UserIdentityConstants.USER.equals(authType)
+            || UserIdentityConstants.USER_TOKEN.equals(authType))
+        && !portalConfig.isEmergencyPublishAllowed(Env.valueOf(env))) {
+      throw new BadRequestException("Env: %s is not supported emergency publish now", env);
+    }
+  }
 
-        if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
-        }
-
-        ReleaseDTO mergedRelease = namespaceBranchService.merge(appId, Env.valueOf(env.toUpperCase()), clusterName, namespaceName, branchName,
-                model.getReleaseTitle(), model.getReleaseComment(),
-                model.isEmergencyPublish(), deleteBranch, model.getReleasedBy());
-
-        return OpenApiBeanUtils.transformFromReleaseDTO(mergedRelease);
+  private String resolveOperator(String queryOperator, String payloadOperator) {
+    String authType = UserIdentityContextHolder.getAuthType();
+    if (UserIdentityConstants.USER.equals(authType)
+        || UserIdentityConstants.USER_TOKEN.equals(authType)) {
+      UserInfo loginUser = userInfoHolder.getUser();
+      if (loginUser == null || StringUtils.isBlank(loginUser.getUserId())) {
+        throw new BadRequestException("Current user not found");
+      }
+      return loginUser.getUserId();
     }
 
-    @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
-    @PostMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/branches/{branchName}/releases")
-    public OpenReleaseDTO createGrayRelease(@PathVariable String appId,
-                                        @PathVariable String env, @PathVariable String clusterName,
-                                        @PathVariable String namespaceName, @PathVariable String branchName,
-                                        @RequestBody NamespaceReleaseDTO model,
-                                        HttpServletRequest request) {
-        RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(model.getReleasedBy(), model
-                        .getReleaseTitle()),
-                "Params(releaseTitle and releasedBy) can not be empty");
-
-        if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
-        }
-
-        NamespaceReleaseModel releaseModel = BeanUtils.transform(NamespaceReleaseModel.class, model);
-
-        releaseModel.setAppId(appId);
-        releaseModel.setEnv(Env.valueOf(env).toString());
-        releaseModel.setClusterName(branchName);
-        releaseModel.setNamespaceName(namespaceName);
-
-        return OpenApiBeanUtils.transformFromReleaseDTO(releaseService.publish(releaseModel));
+    if (UserIdentityConstants.CONSUMER.equals(authType)) {
+      String operator = StringUtils.isBlank(queryOperator) ? payloadOperator : queryOperator;
+      RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(operator),
+          "operator should not be null or empty");
+      if (userService.findByUserId(operator) == null) {
+        throw BadRequestException.userNotExists(operator);
+      }
+      return operator;
     }
 
-    @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
-    @PostMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/branches/{branchName}/gray-del-releases")
-    public OpenReleaseDTO createGrayDelRelease(@PathVariable String appId,
-                                               @PathVariable String env, @PathVariable String clusterName,
-                                               @PathVariable String namespaceName, @PathVariable String branchName,
-                                               @RequestBody NamespaceGrayDelReleaseDTO model,
-                                               HttpServletRequest request) {
-        RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(model.getReleasedBy(), model
-                        .getReleaseTitle()),
-                "Params(releaseTitle and releasedBy) can not be empty");
-        RequestPrecondition.checkArguments(model.getGrayDelKeys() != null,
-                "Params(grayDelKeys) can not be null");
+    throw new BadRequestException("Unsupported auth type: %s", authType);
+  }
 
-        if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
-        }
+  private boolean shouldHideConfigToPortalUser(String appId, String env, String clusterName,
+      String namespaceName) {
+    return UserIdentityConstants.USER.equals(UserIdentityContextHolder.getAuthType())
+        && unifiedPermissionValidator.shouldHideConfigToCurrentUser(appId, env, clusterName,
+            namespaceName);
+  }
 
-        NamespaceGrayDelReleaseModel releaseModel = BeanUtils.transform(NamespaceGrayDelReleaseModel.class, model);
-        releaseModel.setAppId(appId);
-        releaseModel.setEnv(env.toUpperCase());
-        releaseModel.setClusterName(branchName);
-        releaseModel.setNamespaceName(namespaceName);
-
-        return OpenApiBeanUtils.transformFromReleaseDTO(releaseService.publish(releaseModel, releaseModel.getReleasedBy()));
+  private void checkReleaseNamespaceReadAllowed(String appId, String env, String clusterName,
+      String namespaceName) {
+    String authType = UserIdentityContextHolder.getAuthType();
+    if (UserIdentityConstants.USER_TOKEN.equals(authType) && unifiedPermissionValidator
+        .shouldHideConfigToCurrentUser(appId, env, clusterName, namespaceName)) {
+      throw new AccessDeniedException("Access is denied");
     }
-
-  @PutMapping(path = "/releases/{releaseId}/rollback")
-  public void rollback(@PathVariable String env,
-      @PathVariable long releaseId, @RequestParam String operator, HttpServletRequest request) {
-    RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(operator),
-        "Param operator can not be empty");
-
-    if (userService.findByUserId(operator) == null) {
-      throw new BadRequestException("user(operator) not exists");
+    if (UserIdentityConstants.CONSUMER.equals(authType) && !unifiedPermissionValidator
+        .hasReleaseNamespacePermission(appId, env, clusterName, namespaceName)) {
+      throw new AccessDeniedException("Access is denied");
     }
+  }
 
-    ReleaseDTO release = releaseService.findReleaseById(Env.valueOf(env), releaseId);
-
+  private ReleaseDTO findReleaseOrThrow(Env env, long releaseId) {
+    ReleaseDTO release = releaseService.findReleaseById(env, releaseId);
     if (release == null) {
-      throw new BadRequestException("release not found");
+      throw NotFoundException.releaseNotFound(releaseId);
     }
-
-    if (!consumerPermissionValidator.hasReleaseNamespacePermission(request,release.getAppId(), release.getNamespaceName(), env)) {
-      throw new AccessDeniedException("Forbidden operation. you don't have release permission");
-    }
-
-    releaseService.rollback(Env.valueOf(env), releaseId, operator);
-
+    return release;
   }
 
+  private ReleaseDTO findReleaseForCompareOrThrow(Env env, long releaseId) {
+    return releaseId == 0 ? null : findReleaseOrThrow(env, releaseId);
+  }
+
+  private void checkReleaseReadAllowed(String env, ReleaseDTO release) {
+    if (release == null) {
+      return;
+    }
+    String authType = UserIdentityContextHolder.getAuthType();
+    if ((UserIdentityConstants.USER.equals(authType)
+        || UserIdentityConstants.USER_TOKEN.equals(authType))
+        && unifiedPermissionValidator.shouldHideConfigToCurrentUser(release.getAppId(), env,
+            release.getClusterName(), release.getNamespaceName())) {
+      throw new AccessDeniedException("Access is denied");
+    }
+    if (UserIdentityConstants.CONSUMER.equals(authType)
+        && !unifiedPermissionValidator.hasReleaseNamespacePermission(release.getAppId(), env,
+            release.getClusterName(), release.getNamespaceName())) {
+      throw new AccessDeniedException("Access is denied");
+    }
+  }
+
+  private int resolvePage(Integer page) {
+    return page == null ? DEFAULT_PAGE : page;
+  }
+
+  private int resolvePageSize(Integer size, int defaultSize) {
+    return size == null ? defaultSize : size;
+  }
+
+  private void publishEvent(String appId, String clusterName, String namespaceName, long releaseId,
+      Env env, PublishEventType eventType) {
+    ConfigPublishEvent event = ConfigPublishEvent.instance();
+    event.withAppId(appId).withCluster(clusterName).withNamespace(namespaceName)
+        .withReleaseId(releaseId).setEnv(env);
+    if (eventType == PublishEventType.GRAY) {
+      event.setGrayPublishEvent(true);
+    } else {
+      event.setNormalPublishEvent(true);
+    }
+    publisher.publishEvent(event);
+  }
+
+  private enum PublishEventType {
+    NORMAL, GRAY
+  }
 }

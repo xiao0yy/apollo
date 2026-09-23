@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ application_module.config(function (valdrProvider) {
             },
             'comment': {
                 'size': {
-                    'max': 64,
+                    'max': 256,
                     'message': 'Valdr.Item.Comment.Size'
                 }
             }
@@ -111,7 +111,7 @@ application_module.config(function (valdrProvider) {
             },
             'comment': {
                 'size': {
-                    'max': 64,
+                    'max': 256,
                     'message': 'Valdr.Release.Comment.Size'
                 }
             }

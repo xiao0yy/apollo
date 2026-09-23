@@ -1,6 +1,6 @@
 <?xml version="1.0"  encoding="UTF-8"?>
 <!--
-  ~ Copyright 2021 Apollo Authors
+  ~ Copyright 2024 Apollo Authors
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -27,9 +27,11 @@
 	<artifactId>apollo-portal</artifactId>
 	<name>Apollo Portal</name>
 	<properties>
+		<apollo.openapi.spec.url>https://raw.githubusercontent.com/apolloconfig/apollo-openapi/v0.3.12/apollo-openapi.yaml</apollo.openapi.spec.url>
 		<github.path>${project.artifactId}</github.path>
 		<maven.build.timestamp.format>yyyyMMddHHmmss</maven.build.timestamp.format>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.security</groupId>
@@ -42,6 +44,23 @@
 		<dependency>
 			<groupId>com.ctrip.framework.apollo</groupId>
 			<artifactId>apollo-openapi</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.openapitools</groupId>
+			<artifactId>jackson-databind-nullable</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-annotations</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-models</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.ctrip.framework.apollo</groupId>
+			<artifactId>apollo-audit-spring-boot-starter</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -51,45 +70,76 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- Temporary Spring Boot 4 migration aid until Portal moves its OpenAPI nullable models
+		     and Spring Session serializers off the Jackson 2 compatibility path. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jackson2</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-data-redis</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-jdbc</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<!-- annotation processor -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<!-- /annotation processor -->
 		<!-- yml processing -->
 		<dependency>
 			<groupId>org.yaml</groupId>
 			<artifactId>snakeyaml</artifactId>
 		</dependency>
 		<!-- end of yml processing -->
-		<!-- JDK 1.8+ -->
+		<!-- Jakarta EE APIs -->
 		<dependency>
-			<groupId>javax.xml.bind</groupId>
-			<artifactId>jaxb-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.sun.xml.bind</groupId>
-			<artifactId>jaxb-impl</artifactId>
+			<groupId>jakarta.xml.bind</groupId>
+			<artifactId>jakarta.xml.bind-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.glassfish.jaxb</groupId>
 			<artifactId>jaxb-runtime</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>javax.activation</groupId>
-			<artifactId>activation</artifactId>
+			<groupId>jakarta.activation</groupId>
+			<artifactId>jakarta.activation-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.sun.mail</groupId>
-			<artifactId>javax.mail</artifactId>
+			<artifactId>jakarta.mail</artifactId>
 		</dependency>
-		<!-- end of JDK 1.8+ -->
+		<!-- end of Jakarta EE APIs -->
 		<!-- JDK 11+ -->
 		<dependency>
 			<groupId>org.javassist</groupId>
 			<artifactId>javassist</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents.client5</groupId>
+			<artifactId>httpclient5</artifactId>
+		</dependency>
 		<!-- end of JDK 11+ -->
 
 		<!-- test -->
 		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -101,6 +151,41 @@
 
 	</dependencies>
 	<build>
+		<!-- openapi-generator configuration -->
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.openapitools</groupId>
+					<artifactId>openapi-generator-maven-plugin</artifactId>
+					<version>${openapi-generator.version}</version>
+					<executions>
+						<execution>
+							<id>generate-openapi-sources</id>
+							<phase>generate-sources</phase>
+							<goals>
+								<goal>generate</goal>
+							</goals>
+							<configuration>
+								<inputSpec>${apollo.openapi.spec.url}</inputSpec>
+								<generatorName>spring</generatorName>
+								<output>${project.build.directory}/generated-sources/openapi</output>
+								<apiPackage>com.ctrip.framework.apollo.openapi.api</apiPackage>
+								<modelPackage>com.ctrip.framework.apollo.openapi.model</modelPackage>
+								<invokerPackage>com.ctrip.framework.apollo.openapi.invoker</invokerPackage>
+								<configOptions>
+									<interfaceOnly>true</interfaceOnly>
+									<useTags>true</useTags>
+									<dateLibrary>java8</dateLibrary>
+									<useSpringBoot4>true</useSpringBoot4>
+								</configOptions>
+								<skipValidateSpec>true</skipValidateSpec>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
@@ -178,21 +263,31 @@
 					</replacements>
 				</configuration>
 			</plugin>
+			<!-- Generate code from OpenAPI specification during the maven build -->
+			<plugin>
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+			</plugin>
+			<!-- Add OpenAPI generated sources to the Maven compile path -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>build-helper-maven-plugin</artifactId>
+				<version>3.4.0</version>
+				<executions>
+					<execution>
+						<id>add-openapi-sources</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>add-source</goal>
+						</goals>
+						<configuration>
+							<sources>
+								<source>${project.build.directory}/generated-sources/openapi/src/main/java</source>
+							</sources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
-	<profiles>
-		<profile>
-			<id>ctrip</id>
-			<dependencies>
-				<dependency>
-					<groupId>com.ctrip.framework.apollo-sso</groupId>
-					<artifactId>apollo-sso-ctrip</artifactId>
-				</dependency>
-				<dependency>
-					<groupId>com.ctrip.framework.apollo-ctrip-service</groupId>
-					<artifactId>apollo-email-service</artifactId>
-				</dependency>
-			</dependencies>
-		</profile>
-	</profiles>
 </project>

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ appService.service('ReleaseHistoryService', ['$resource', '$q', 'AppUtil', funct
     var resource = $resource('', {}, {
         find_release_history_by_namespace: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/apps/:appId/envs/:env/clusters/:clusterName/namespaces/:namespaceName/releases/histories',
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/envs/:env/clusters/:clusterName/namespaces/:namespaceName/releases/histories',
             isArray: true
         }
     });

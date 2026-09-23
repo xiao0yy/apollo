@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,33 +19,37 @@ package com.ctrip.framework.apollo.biz.entity;
 import com.ctrip.framework.apollo.common.entity.BaseEntity;
 
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
+import org.hibernate.annotations.SQLRestriction;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Lob;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Item")
-@SQLDelete(sql = "Update Item set isDeleted = 1 where id = ?")
-@Where(clause = "isDeleted = 0")
+@Table(name = "`Item`")
+@SQLDelete(
+    sql = "Update `Item` set IsDeleted = true, DeletedAt = ROUND(UNIX_TIMESTAMP(NOW(4))*1000) where Id = ?")
+@SQLRestriction("`IsDeleted` = false")
 public class Item extends BaseEntity {
 
-  @Column(name = "NamespaceId", nullable = false)
+  @Column(name = "`NamespaceId`", nullable = false)
   private long namespaceId;
 
-  @Column(name = "key", nullable = false)
+  @Column(name = "`Key`", nullable = false)
   private String key;
 
-  @Column(name = "value")
+  @Column(name = "`Type`")
+  private int type;
+
+  @Column(name = "`Value`")
   @Lob
   private String value;
 
-  @Column(name = "comment")
+  @Column(name = "`Comment`")
   private String comment;
 
-  @Column(name = "LineNum")
+  @Column(name = "`LineNum`")
   private Integer lineNum;
 
   public String getComment() {
@@ -88,8 +92,17 @@ public class Item extends BaseEntity {
     this.lineNum = lineNum;
   }
 
+  public int getType() {
+    return type;
+  }
+
+  public void setType(int type) {
+    this.type = type;
+  }
+
+  @Override
   public String toString() {
-    return toStringHelper().add("namespaceId", namespaceId).add("key", key).add("value", value)
-        .add("lineNum", lineNum).add("comment", comment).toString();
+    return toStringHelper().add("namespaceId", namespaceId).add("key", key).add("type", type)
+        .add("value", value).add("lineNum", lineNum).add("comment", comment).toString();
   }
 }

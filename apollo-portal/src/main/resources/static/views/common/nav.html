@@ -1,20 +1,20 @@
-<!--
-  ~ Copyright 2021 Apollo Authors
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~ http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
-  ~
--->
 <nav class="navbar navbar-default">
+    <!--
+      ~ Copyright 2024 Apollo Authors
+      ~
+      ~ Licensed under the Apache License, Version 2.0 (the "License");
+      ~ you may not use this file except in compliance with the License.
+      ~ You may obtain a copy of the License at
+      ~
+      ~ http://www.apache.org/licenses/LICENSE-2.0
+      ~
+      ~ Unless required by applicable law or agreed to in writing, software
+      ~ distributed under the License is distributed on an "AS IS" BASIS,
+      ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      ~ See the License for the specific language governing permissions and
+      ~ limitations under the License.
+      ~
+    -->
     <div class="container-fluid">
         <div class="navbar-header">
             <img class="navbar-brand side-bar-switch cursor-pointer" src="{{ '/img/show_sidebar.png' | prefixPath }}"
@@ -29,20 +29,21 @@
                  data-tooltip="tooltip" data-placement="bottom" title="{{'Common.Nav.HideNavBar' | translate }}"
                  ng-show="viewMode == 2 && showSideBar"
                  ng-click="showSideBar = !showSideBar">
-            <a class="navbar-brand logo" href="{{ '/' | prefixPath }}">
-                <img src="{{ '/img/logo-simple.png' | prefixPath }}" style="height:45px; margin-top: -13px">
+            <a class="navbar-brand logo" ng-href="{{ '/' | prefixPath }}">
+                <img class="logo" src="{{ '/img/logo-simple.png' | prefixPath }}">
             </a>
         </div>
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+        <div class="collapse navbar-collapse">
 
             <ul class="nav navbar-nav navbar-right">
                 <li>
-                    <a href="{{pageSetting.wikiAddress}}" target="_blank">
+                    <a ng-href="{{pageSetting.wikiAddress}}" target="_blank" rel="noopener noreferrer">
                         <span class="glyphicon glyphicon-question-sign"></span> {{'Common.Nav.Help' | translate }}
                     </a>
                 </li>
                 <li class="dropdown">
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                        <img class="nav-switch-lang" style="" src="{{ '/img/language.png' | prefixPath }}">
                         <span class="glyphicon .glyphicon-glyphicon-font"></span>&nbsp;Language<span class="caret"></span></a>
 
                     <ul class="dropdown-menu">
@@ -55,15 +56,18 @@
                 <li class="dropdown" ng-if="hasRootPermission == true">
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
                         <span class="glyphicon glyphicon-cog"></span>&nbsp;{{'Common.Nav.AdminTools' | translate }}
-                        <span class="caret"></span></a>
+                    <span class="caret"></span></a>
                     <ul class="dropdown-menu" >
-                        <li><a ng-href="{{ '/user-manage.html' | prefixPath }}" target="_blank">{{'Common.Nav.UserManage' | translate }}</a></li>
-                        <li><a href="{{ '/system-role-manage.html' | prefixPath }}" target="_blank">{{'Common.Nav.SystemRoleManage' | translate }}</a></li>
-                        <li><a href="{{ '/open/manage.html' | prefixPath }}" target="_blank">{{'Common.Nav.OpenMange' | translate }}</a></li>
-                        <li><a href="{{ '/server_config.html' | prefixPath }}" target="_blank">{{'Common.Nav.SystemConfig' | translate }}</a></li>
-                        <li><a href="{{ '/delete_app_cluster_namespace.html' | prefixPath }}" target="_blank">{{'Common.Nav.DeleteApp-Cluster-Namespace' | translate }}</a></li>
-                        <li><a href="{{ '/system_info.html' | prefixPath }}" target="_blank">{{'Common.Nav.SystemInfo' | translate }}</a></li>
-                        <li><a href="{{ '/config_export.html' | prefixPath }}" target="_blank">{{'Common.Nav.ConfigExport' | translate }}</a></li>
+                        <li><a ng-href="{{ '/user-manage.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.UserManage' | translate }}</a></li>
+                        <li><a ng-href="{{ '/user-token-admin.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.UserTokenAdmin' | translate }}</a></li>
+                        <li><a ng-href="{{ '/system-role-manage.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.SystemRoleManage' | translate }}</a></li>
+                        <li><a ng-href="{{ '/open/manage.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.OpenMange' | translate }}</a></li>
+                        <li><a ng-href="{{ '/server_config_manage.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.SystemConfig' | translate }}</a></li>
+                        <li><a ng-href="{{ '/delete_app_cluster_namespace.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.DeleteApp-Cluster-Namespace' | translate }}</a></li>
+                        <li><a ng-href="{{ '/system_info.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.SystemInfo' | translate }}</a></li>
+                        <li><a ng-href="{{ '/config_export.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.ConfigExport' | translate }}</a></li>
+                        <li><a ng-href="{{ '/audit_log_menu.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'ApolloAuditLog.Title' | translate }}</a></li>
+                        <li><a ng-href="{{ '/global_search_value.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Global.Title' | translate }}</a></li>
                     </ul>
                 </li>
 
@@ -73,16 +77,18 @@
                         <span class="glyphicon glyphicon-cog"></span>&nbsp;{{'Common.Nav.NonAdminTools' | translate }}
                         <span class="caret"></span></a>
                     <ul class="dropdown-menu" >
-                        <li><a href="{{ '/config_export.html' | prefixPath }}" target="_blank">{{'Common.Nav.ConfigExport' | translate }}</a></li>
+                        <li><a ng-href="{{ '/user-manage.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.UserManage' | translate }}</a></li>
+                        <li><a ng-href="{{ '/config_export.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.ConfigExport' | translate }}</a></li>
                     </ul>
                 </li>
 
                 <li class="dropdown">
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-                        <span class="glyphicon glyphicon-user"></span>&nbsp;{{userName}}
+                        <span class="glyphicon glyphicon-user"></span>&nbsp;{{userDisplayName}}({{userName}})
                         <span class="caret"></span></a>
                     <ul class="dropdown-menu">
-                        <li><a href="{{ '/user/logout' | prefixPath }}">{{'Common.Nav.Logout' | translate }}</a></li>
+                        <li><a ng-href="{{ '/user-token.html' | prefixPath }}" target="_blank" rel="noopener noreferrer">{{'Common.Nav.UserToken' | translate }}</a></li>
+                        <li><a ng-href="{{ '/user/logout' | prefixPath }}">{{'Common.Nav.Logout' | translate }}</a></li>
                     </ul>
                 </li>
 
@@ -90,7 +96,7 @@
 
             <div class="navbar-form navbar-right form-inline" role="search">
                 <div class="form-group app-search-list">
-                    <select id="app-search-list" style="width: 350px"></select>
+                    <select id="app-search-list"></select>
                 </div>
             </div>
         </div>

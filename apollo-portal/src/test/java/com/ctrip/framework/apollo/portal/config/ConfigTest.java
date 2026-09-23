@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,22 +19,31 @@ package com.ctrip.framework.apollo.portal.config;
 
 import com.ctrip.framework.apollo.portal.AbstractUnitTest;
 import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
+import com.ctrip.framework.apollo.portal.service.PortalDBPropertySource;
 
+import org.junit.Before;
 import org.junit.Assert;
 import org.junit.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.core.env.ConfigurableEnvironment;
 
 import static org.mockito.Mockito.when;
 
-public class ConfigTest extends AbstractUnitTest{
+public class ConfigTest extends AbstractUnitTest {
 
   @Mock
   private ConfigurableEnvironment environment;
-  @InjectMocks
+  @Mock
+  private PortalDBPropertySource portalDBPropertySource;
+
   private PortalConfig config;
 
+  @Before
+  public void setUp() {
+    config = new PortalConfig(portalDBPropertySource);
+    ReflectionTestUtils.setField(config, "environment", environment, ConfigurableEnvironment.class);
+  }
 
   @Test
   public void testGetNotExistValue() {

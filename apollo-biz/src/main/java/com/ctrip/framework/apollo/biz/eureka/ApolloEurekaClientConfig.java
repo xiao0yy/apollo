@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,8 @@ import java.util.List;
 
 @Component
 @Primary
-@ConditionalOnProperty(value = {"eureka.client.enabled"}, havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(value = {"eureka.client.enabled"}, havingValue = "true",
+    matchIfMissing = true)
 public class ApolloEurekaClientConfig extends EurekaClientConfigBean {
 
   private final BizConfig bizConfig;
@@ -46,6 +47,7 @@ public class ApolloEurekaClientConfig extends EurekaClientConfigBean {
   /**
    * Assert only one zone: defaultZone, but multiple environments.
    */
+  @Override
   public List<String> getEurekaServerServiceUrls(String myZone) {
     List<String> urls = bizConfig.eurekaServiceUrls();
     return CollectionUtils.isEmpty(urls) ? super.getEurekaServerServiceUrls(myZone) : urls;
@@ -58,9 +60,9 @@ public class ApolloEurekaClientConfig extends EurekaClientConfigBean {
 
   private void refreshEurekaClient() {
     if (!super.isFetchRegistry()) {
-        super.setFetchRegistry(true);
-        super.setRegisterWithEureka(true);
-        refreshScope.refresh(EUREKA_CLIENT_BEAN_NAME);
+      super.setFetchRegistry(true);
+      super.setRegisterWithEureka(true);
+      refreshScope.refresh(EUREKA_CLIENT_BEAN_NAME);
     }
   }
 

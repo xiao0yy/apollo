@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import com.ctrip.framework.apollo.portal.entity.po.RolePermission;
 
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -28,7 +29,7 @@ import java.util.List;
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
-public interface RolePermissionRepository extends PagingAndSortingRepository<RolePermission, Long> {
+public interface RolePermissionRepository extends JpaRepository<RolePermission, Long> {
 
   /**
    * find role permissions by role ids
@@ -36,6 +37,9 @@ public interface RolePermissionRepository extends PagingAndSortingRepository<Rol
   List<RolePermission> findByRoleIdIn(Collection<Long> roleId);
 
   @Modifying
-  @Query("UPDATE RolePermission SET IsDeleted=1, DataChange_LastModifiedBy = ?2 WHERE PermissionId in ?1")
-  Integer batchDeleteByPermissionIds(List<Long> permissionIds, String operator);
+  @Query("UPDATE RolePermission SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = :operator WHERE permissionId in :permissionIds and isDeleted = false")
+  Integer batchDeleteByPermissionIds(@Param("permissionIds") List<Long> permissionIds,
+      @Param("operator") String operator);
 }

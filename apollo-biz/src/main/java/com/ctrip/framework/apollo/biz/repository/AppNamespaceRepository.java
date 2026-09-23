@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ import com.ctrip.framework.apollo.common.entity.AppNamespace;
 
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Set;
 
 
-public interface AppNamespaceRepository extends PagingAndSortingRepository<AppNamespace, Long>{
+public interface AppNamespaceRepository extends JpaRepository<AppNamespace, Long> {
 
   AppNamespace findByAppIdAndName(String appId, String namespaceName);
 
@@ -38,15 +38,19 @@ public interface AppNamespaceRepository extends PagingAndSortingRepository<AppNa
 
   List<AppNamespace> findByAppIdAndIsPublic(String appId, boolean isPublic);
 
-  List<AppNamespace> findByAppId(String appId);
+  List<AppNamespace> findByAppIdOrderByIdAsc(String appId);
 
   List<AppNamespace> findFirst500ByIdGreaterThanOrderByIdAsc(long id);
 
   @Modifying
-  @Query("UPDATE AppNamespace SET IsDeleted=1,DataChange_LastModifiedBy = ?2 WHERE AppId=?1")
+  @Query("UPDATE AppNamespace SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = ?2 WHERE appId=?1 and isDeleted = false")
   int batchDeleteByAppId(String appId, String operator);
 
   @Modifying
-  @Query("UPDATE AppNamespace SET IsDeleted=1,DataChange_LastModifiedBy = ?3 WHERE AppId=?1 and Name = ?2")
+  @Query("UPDATE AppNamespace SET isDeleted = true, "
+      + "deletedAt = :#{T(java.lang.System).currentTimeMillis()}, "
+      + "dataChangeLastModifiedBy = ?3 WHERE appId=?1 and name = ?2 and isDeleted = false")
   int delete(String appId, String namespaceName, String operator);
 }

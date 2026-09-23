@@ -1,0 +1,639 @@
+/*
+ * Copyright 2025 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+package com.ctrip.framework.apollo.openapi.v1.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.ctrip.framework.apollo.openapi.model.OpenItemDTO;
+import com.ctrip.framework.apollo.openapi.model.OpenItemPageDTO;
+import com.ctrip.framework.apollo.openapi.model.OpenNamespaceIdentifier;
+import com.ctrip.framework.apollo.openapi.model.OpenNamespaceSyncDTO;
+import com.ctrip.framework.apollo.openapi.server.service.ItemOpenApiService;
+import com.ctrip.framework.apollo.portal.component.UnifiedPermissionValidator;
+import com.ctrip.framework.apollo.portal.component.UserIdentityContextHolder;
+import com.ctrip.framework.apollo.portal.constant.UserIdentityConstants;
+import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
+import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
+import com.ctrip.framework.apollo.portal.spi.UserService;
+import com.google.gson.Gson;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+/**
+ * Low-level MockMvc tests for ItemController parameter binding and identity handling.
+ */
+@ExtendWith(SpringExtension.class)
+@SpringBootTest
+@AutoConfigureMockMvc(addFilters = false)
+public class ItemControllerParamBindLowLevelTest {
+
+  private static final String APP_ID = "app-1";
+  private static final String ENV = "DEV";
+  private static final String CLUSTER = "default";
+  private static final String NAMESPACE = "application";
+
+  @Autowired
+  private MockMvc mockMvc;
+
+  @MockitoBean(name = "unifiedPermissionValidator")
+  private UnifiedPermissionValidator unifiedPermissionValidator;
+
+  @MockitoBean
+  private UserService userService;
+
+  @MockitoBean
+  private UserInfoHolder userInfoHolder;
+
+  @MockitoBean
+  private ItemOpenApiService itemOpenApiService;
+
+  private final Gson gson = new Gson();
+
+  @BeforeEach
+  public void setUp() {
+    when(unifiedPermissionValidator.hasModifyNamespacePermission(anyString(), anyString(),
+        anyString(), anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(anyString(), anyString(),
+        anyString(), anyString())).thenReturn(false);
+
+    UserInfo user = new UserInfo();
+    user.setUserId("tester");
+    when(userService.findByUserId(anyString())).thenReturn(user);
+    when(userInfoHolder.getUser()).thenReturn(user);
+
+    SecurityContextHolder.clearContext();
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken("tester", "N/A", AuthorityUtils.NO_AUTHORITIES));
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.CONSUMER);
+  }
+
+  @AfterEach
+  public void tearDown() {
+    SecurityContextHolder.clearContext();
+    UserIdentityContextHolder.clear();
+  }
+
+  @Test
+  public void createItemShouldUsePayloadOperatorForConsumerWhenQueryOperatorMissing()
+      throws Exception {
+    OpenItemDTO request = new OpenItemDTO();
+    request.setKey("timeout");
+    request.setValue("100");
+    request.setDataChangeCreatedBy("api-operator");
+
+    OpenItemDTO response = new OpenItemDTO();
+    response.setKey("timeout");
+    response.setValue("100");
+    response.setDataChangeCreatedBy("api-operator");
+    response.setDataChangeCreatedByDisplayName("API Operator");
+    response.setDataChangeLastModifiedBy("api-operator");
+    response.setDataChangeLastModifiedByDisplayName("API Operator");
+    when(itemOpenApiService.createItem(anyString(), anyString(), anyString(), anyString(),
+        any(OpenItemDTO.class), anyString())).thenReturn(response);
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isOk())
+        .andExpect(jsonPath("$.key").value("timeout"))
+        .andExpect(jsonPath("$.dataChangeCreatedByDisplayName").value("API Operator"))
+        .andExpect(jsonPath("$.dataChangeLastModifiedByDisplayName").value("API Operator"));
+
+    ArgumentCaptor<OpenItemDTO> itemCaptor = ArgumentCaptor.forClass(OpenItemDTO.class);
+    ArgumentCaptor<String> operatorCaptor = ArgumentCaptor.forClass(String.class);
+    verify(itemOpenApiService).createItem(anyString(), anyString(), anyString(), anyString(),
+        itemCaptor.capture(), operatorCaptor.capture());
+    assertThat(itemCaptor.getValue().getDataChangeCreatedBy()).isEqualTo("api-operator");
+    assertThat(operatorCaptor.getValue()).isEqualTo("api-operator");
+  }
+
+  @Test
+  public void createItemShouldUseCurrentPortalUserAndIgnoreSpoofedPayloadOperator()
+      throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER);
+    UserInfo portalUser = new UserInfo();
+    portalUser.setUserId("portal-user");
+    when(userInfoHolder.getUser()).thenReturn(portalUser);
+
+    OpenItemDTO request = new OpenItemDTO();
+    request.setKey("timeout");
+    request.setValue("100");
+    request.setDataChangeCreatedBy("spoofed-user");
+
+    OpenItemDTO response = new OpenItemDTO();
+    response.setKey("timeout");
+    when(itemOpenApiService.createItem(anyString(), anyString(), anyString(), anyString(),
+        any(OpenItemDTO.class), anyString())).thenReturn(response);
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isOk());
+
+    ArgumentCaptor<OpenItemDTO> itemCaptor = ArgumentCaptor.forClass(OpenItemDTO.class);
+    ArgumentCaptor<String> operatorCaptor = ArgumentCaptor.forClass(String.class);
+    verify(itemOpenApiService).createItem(anyString(), anyString(), anyString(), anyString(),
+        itemCaptor.capture(), operatorCaptor.capture());
+    assertThat(itemCaptor.getValue().getDataChangeCreatedBy()).isEqualTo("portal-user");
+    assertThat(itemCaptor.getValue().getDataChangeLastModifiedBy()).isEqualTo("portal-user");
+    assertThat(operatorCaptor.getValue()).isEqualTo("portal-user");
+  }
+
+  @Test
+  public void createItemShouldUseCurrentUserTokenUserAndIgnoreSpoofedPayloadOperator()
+      throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    UserInfo tokenUser = new UserInfo();
+    tokenUser.setUserId("token-user");
+    when(userInfoHolder.getUser()).thenReturn(tokenUser);
+
+    OpenItemDTO request = new OpenItemDTO();
+    request.setKey("timeout");
+    request.setValue("100");
+    request.setDataChangeCreatedBy("spoofed-user");
+
+    OpenItemDTO response = new OpenItemDTO();
+    response.setKey("timeout");
+    when(itemOpenApiService.createItem(anyString(), anyString(), anyString(), anyString(),
+        any(OpenItemDTO.class), anyString())).thenReturn(response);
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isOk());
+
+    ArgumentCaptor<OpenItemDTO> itemCaptor = ArgumentCaptor.forClass(OpenItemDTO.class);
+    ArgumentCaptor<String> operatorCaptor = ArgumentCaptor.forClass(String.class);
+    verify(itemOpenApiService).createItem(anyString(), anyString(), anyString(), anyString(),
+        itemCaptor.capture(), operatorCaptor.capture());
+    assertThat(itemCaptor.getValue().getDataChangeCreatedBy()).isEqualTo("token-user");
+    assertThat(itemCaptor.getValue().getDataChangeLastModifiedBy()).isEqualTo("token-user");
+    assertThat(operatorCaptor.getValue()).isEqualTo("token-user");
+  }
+
+  @Test
+  public void updateItemShouldRejectPathPayloadKeyMismatch() throws Exception {
+    OpenItemDTO request = new OpenItemDTO();
+    request.setKey("other-key");
+    request.setValue("100");
+    request.setDataChangeLastModifiedBy("api-operator");
+
+    mockMvc.perform(put(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, "timeout").contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).updateItem(anyString(), anyString(), anyString(),
+        anyString(), any(OpenItemDTO.class), anyString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "logging/level", "logging\\level"})
+  public void deleteItemShouldRejectBlankConsumerOperator(String key) throws Exception {
+    mockMvc.perform(deleteItemRequest(key)).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).removeItem(anyString(), anyString(), anyString(),
+        anyString(), anyString(), anyString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "logging/level", "logging\\level"})
+  public void deleteItemShouldUseTokenOwnerWithoutOperator(String key) throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+
+    mockMvc.perform(deleteItemRequest(key)).andExpect(status().isOk());
+
+    verify(itemOpenApiService).removeItem(APP_ID, ENV, CLUSTER, NAMESPACE, key, "tester");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "logging/level", "logging\\level"})
+  public void deleteItemShouldIgnoreSpoofedOperatorForUserToken(String key) throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+
+    mockMvc.perform(deleteItemRequest(key).param("operator", "spoofed-user"))
+        .andExpect(status().isOk());
+
+    verify(itemOpenApiService).removeItem(APP_ID, ENV, CLUSTER, NAMESPACE, key, "tester");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "logging/level", "logging\\level"})
+  public void deleteItemShouldUseConsumerOperator(String key) throws Exception {
+    mockMvc.perform(deleteItemRequest(key).param("operator", "api-operator"))
+        .andExpect(status().isOk());
+
+    verify(itemOpenApiService).removeItem(APP_ID, ENV, CLUSTER, NAMESPACE, key, "api-operator");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "logging/level", "logging\\level"})
+  public void deleteItemShouldRejectUserTokenWithoutModifyPermission(String key) throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    when(unifiedPermissionValidator.hasModifyNamespacePermission(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(false);
+
+    mockMvc.perform(deleteItemRequest(key)).andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).removeItem(anyString(), anyString(), anyString(),
+        anyString(), anyString(), anyString());
+  }
+
+  private MockHttpServletRequestBuilder deleteItemRequest(String key) {
+    boolean encoded = key.contains("/") || key.contains("\\");
+    String resource = encoded ? "encodedItems" : "items";
+    String pathKey =
+        encoded
+            ? Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(key.getBytes(StandardCharsets.UTF_8))
+            : key;
+    return delete(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}"
+            + "/namespaces/{namespaceName}/" + resource + "/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, pathKey);
+  }
+
+  @Test
+  public void findItemsShouldReturnEmptyPageForHiddenPortalUserConfig() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(true);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE).param("page", "0").param("size", "50"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.page").value(0))
+        .andExpect(jsonPath("$.size").value(50)).andExpect(jsonPath("$.total").value(0))
+        .andExpect(jsonPath("$.content.length()").value(0));
+
+    verify(itemOpenApiService, never()).findItemsByNamespace(anyString(), anyString(), anyString(),
+        anyString(), any(Integer.class), any(Integer.class));
+  }
+
+  @Test
+  public void findItemsShouldRejectHiddenUserTokenConfig() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(true);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE).param("page", "0").param("size", "50"))
+        .andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).findItemsByNamespace(anyString(), anyString(), anyString(),
+        anyString(), any(Integer.class), any(Integer.class));
+  }
+
+  @Test
+  public void getItemShouldReturnEmptyBodyForHiddenPortalUserConfig() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(true);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, "timeout")).andExpect(status().isOk())
+        .andExpect(content().string(""));
+
+    verify(itemOpenApiService, never()).getItem(anyString(), anyString(), anyString(), anyString(),
+        anyString());
+  }
+
+  @Test
+  public void getItemShouldRejectHiddenUserTokenConfig() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(true);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, "timeout")).andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).getItem(anyString(), anyString(), anyString(), anyString(),
+        anyString());
+  }
+
+  @Test
+  public void findBranchItemsShouldRejectHiddenUserTokenConfig() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    String branchName = "gray";
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, branchName,
+        NAMESPACE)).thenReturn(true);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/branches/{branchName}/items",
+        ENV, APP_ID, CLUSTER, NAMESPACE, branchName)).andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).findBranchItems(anyString(), anyString(), anyString(),
+        anyString());
+  }
+
+  @Test
+  public void getItemByEncodedKeyShouldDecodeBase64KeyBeforeCallingService() throws Exception {
+    String key = "feature.flag";
+    String encodedKey = Base64.getEncoder().encodeToString(key.getBytes(StandardCharsets.UTF_8));
+    OpenItemDTO response = new OpenItemDTO();
+    response.setKey(key);
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, key)).thenReturn(response);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/encodedItems/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, encodedKey)).andExpect(status().isOk())
+        .andExpect(jsonPath("$.key").value(key));
+
+    verify(itemOpenApiService).getItem(APP_ID, ENV, CLUSTER, NAMESPACE, key);
+  }
+
+  @Test
+  public void getItemByEncodedKeyShouldDecodeUrlSafeBase64KeyBeforeCallingService()
+      throws Exception {
+    String key = "k'?";
+    String encodedKey = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(key.getBytes(StandardCharsets.UTF_8));
+    OpenItemDTO response = new OpenItemDTO();
+    response.setKey(key);
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, key)).thenReturn(response);
+
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/encodedItems/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, encodedKey)).andExpect(status().isOk())
+        .andExpect(jsonPath("$.key").value(key));
+
+    verify(itemOpenApiService).getItem(APP_ID, ENV, CLUSTER, NAMESPACE, key);
+  }
+
+  @Test
+  public void getItemByEncodedKeyShouldRejectMalformedBase64Key() throws Exception {
+    mockMvc.perform(get(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/encodedItems/{key}",
+        ENV, APP_ID, CLUSTER, NAMESPACE, "not-base64!")).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).getItem(anyString(), anyString(), anyString(), anyString(),
+        anyString());
+  }
+
+  @Test
+  public void findItemsShouldDelegateForConsumerEvenWhenConfigWouldBeHiddenForUser()
+      throws Exception {
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER,
+        NAMESPACE)).thenReturn(true);
+    OpenItemPageDTO page = new OpenItemPageDTO();
+    page.setPage(0);
+    page.setSize(50);
+    page.setTotal(0L);
+    page.setContent(Collections.emptyList());
+    when(itemOpenApiService.findItemsByNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, 0, 50))
+        .thenReturn(page);
+
+    mockMvc.perform(get(
+            "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items",
+            ENV, APP_ID, CLUSTER, NAMESPACE).param("page", "0").param("size", "50"))
+        .andExpect(status().isOk());
+
+    verify(itemOpenApiService).findItemsByNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, 0, 50);
+  }
+
+  @Test
+  public void compareItemsShouldAcceptEmptySyncItems() throws Exception {
+    OpenNamespaceIdentifier namespaceIdentifier = new OpenNamespaceIdentifier();
+    namespaceIdentifier.setAppId(APP_ID);
+    namespaceIdentifier.setEnv(ENV);
+    namespaceIdentifier.setClusterName(CLUSTER);
+    namespaceIdentifier.setNamespaceName(NAMESPACE);
+    OpenNamespaceSyncDTO request = new OpenNamespaceSyncDTO();
+    request.setSyncToNamespaces(Collections.singletonList(namespaceIdentifier));
+    request.setSyncItems(Collections.emptyList());
+    when(itemOpenApiService.compareItems(anyString(), anyString(), anyString(), anyString(),
+        any(OpenNamespaceSyncDTO.class))).thenReturn(Collections.emptyList());
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/diff",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isOk());
+
+    ArgumentCaptor<OpenNamespaceSyncDTO> requestCaptor =
+        ArgumentCaptor.forClass(OpenNamespaceSyncDTO.class);
+    verify(itemOpenApiService).compareItems(anyString(), anyString(), anyString(), anyString(),
+        requestCaptor.capture());
+    assertThat(requestCaptor.getValue().getSyncItems()).isEmpty();
+  }
+
+  @Test
+  public void compareItemsShouldRejectUserTokenWithoutSourceConfigRead() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(true);
+
+    OpenNamespaceSyncDTO request = syncRequest(APP_ID, ENV, CLUSTER, NAMESPACE);
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/diff",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).compareItems(anyString(), anyString(), anyString(),
+        anyString(), any(OpenNamespaceSyncDTO.class));
+  }
+
+  @Test
+  public void compareItemsShouldRejectUserTokenWithoutTargetConfigRead() throws Exception {
+    UserIdentityContextHolder.setAuthType(UserIdentityConstants.USER_TOKEN);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(false);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(APP_ID, ENV, CLUSTER, "secret"))
+        .thenReturn(true);
+
+    OpenNamespaceSyncDTO request = syncRequest(APP_ID, ENV, CLUSTER, "secret");
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/diff",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(request))).andExpect(status().isForbidden());
+
+    verify(itemOpenApiService, never()).compareItems(anyString(), anyString(), anyString(),
+        anyString(), any(OpenNamespaceSyncDTO.class));
+  }
+
+  private OpenNamespaceSyncDTO syncRequest(String appId, String env, String clusterName,
+      String namespaceName) {
+    OpenNamespaceIdentifier namespaceIdentifier = new OpenNamespaceIdentifier();
+    namespaceIdentifier.setAppId(appId);
+    namespaceIdentifier.setEnv(env);
+    namespaceIdentifier.setClusterName(clusterName);
+    namespaceIdentifier.setNamespaceName(namespaceName);
+    OpenNamespaceSyncDTO request = new OpenNamespaceSyncDTO();
+    request.setSyncToNamespaces(Collections.singletonList(namespaceIdentifier));
+    request.setSyncItems(Collections.emptyList());
+    return request;
+  }
+
+  @Test
+  public void batchCreateItemsShouldRejectEmptyList() throws Exception {
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-create",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.emptyList()))).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchCreateItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchCreateItemsShouldRejectNullElement() throws Exception {
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-create",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON).content("[null]"))
+        .andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchCreateItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchCreateItemsShouldRejectMissingConsumerOperatorEvenWithPayloadCreator()
+      throws Exception {
+    OpenItemDTO item = new OpenItemDTO();
+    item.setKey("timeout");
+    item.setValue("100");
+    item.setDataChangeCreatedBy("payload-creator");
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-create",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.singletonList(item)))).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchCreateItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchCreateItemsShouldDelegateWithResolvedOperator() throws Exception {
+    OpenItemDTO item = new OpenItemDTO();
+    item.setKey("timeout");
+    item.setValue("100");
+
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-create",
+        ENV, APP_ID, CLUSTER, NAMESPACE).param("operator", "api-operator")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.singletonList(item)))).andExpect(status().isOk());
+
+    ArgumentCaptor<List<OpenItemDTO>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemOpenApiService).batchCreateItems(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        itemsCaptor.capture(), eq("api-operator"));
+    assertThat(itemsCaptor.getValue()).extracting(OpenItemDTO::getKey).containsExactly("timeout");
+  }
+
+  @Test
+  public void batchUpdateItemsShouldRejectEmptyList() throws Exception {
+    mockMvc.perform(put(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-update",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.emptyList()))).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchUpdateItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchUpdateItemsShouldRejectNullElement() throws Exception {
+    mockMvc.perform(put(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-update",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON).content("[null]"))
+        .andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchUpdateItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchUpdateItemsShouldDelegateWithResolvedOperator() throws Exception {
+    OpenItemDTO item = new OpenItemDTO();
+    item.setKey("timeout");
+    item.setValue("200");
+
+    mockMvc.perform(put(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-update",
+        ENV, APP_ID, CLUSTER, NAMESPACE).param("operator", "api-operator")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.singletonList(item)))).andExpect(status().isOk());
+
+    ArgumentCaptor<List<OpenItemDTO>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemOpenApiService).batchUpdateItems(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        itemsCaptor.capture(), eq("api-operator"));
+    assertThat(itemsCaptor.getValue()).extracting(OpenItemDTO::getKey).containsExactly("timeout");
+  }
+
+  @Test
+  public void batchDeleteItemsShouldRejectEmptyList() throws Exception {
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-delete",
+        ENV, APP_ID, CLUSTER, NAMESPACE).contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.emptyList()))).andExpect(status().isBadRequest());
+
+    verify(itemOpenApiService, never()).batchDeleteItems(anyString(), anyString(), anyString(),
+        anyString(), any(List.class), anyString());
+  }
+
+  @Test
+  public void batchDeleteItemsShouldDelegateWithResolvedOperator() throws Exception {
+    mockMvc.perform(post(
+        "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/items/batch-delete",
+        ENV, APP_ID, CLUSTER, NAMESPACE).param("operator", "api-operator")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(gson.toJson(Collections.singletonList("timeout")))).andExpect(status().isOk());
+
+    ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemOpenApiService).batchDeleteItems(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        keysCaptor.capture(), eq("api-operator"));
+    assertThat(keysCaptor.getValue()).containsExactly("timeout");
+  }
+}

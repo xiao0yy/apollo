@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ function releaseModalDirective($translate, toastr, AppUtil, EventManager, Releas
             scope.release = release;
 
             scope.releaseBtnDisabled = false;
-            scope.releaseChangeViewType = 'change';
+            scope.releaseChangeViewType = 'compareWithPublishedValue';
+            scope.isComparePublished = true;
             scope.releaseComment = '';
             scope.isEmergencyPublish = false;
 
@@ -111,13 +112,16 @@ function releaseModalDirective($translate, toastr, AppUtil, EventManager, Releas
                             scope.releaseBtnDisabled = false;
 
                             //refresh item status
-                            scope.toReleaseNamespace.branchItems.forEach(function (item, index) {
+                            for (let index = 0; index < scope.toReleaseNamespace.branchItems.length; index++) {
+                                const item = scope.toReleaseNamespace.branchItems[index];
                                 if (item.isDeleted) {
                                     scope.toReleaseNamespace.branchItems.splice(index, 1);
+                                    index--;
                                 } else {
                                     item.isModified = false;
                                 }
-                            });
+                            }
+
                             //reset namespace status
                             scope.toReleaseNamespace.itemModifiedCnt = 0;
                             scope.toReleaseNamespace.lockOwner = undefined;
@@ -167,6 +171,9 @@ function releaseModalDirective($translate, toastr, AppUtil, EventManager, Releas
 
             function switchReleaseChangeViewType(type) {
                 scope.releaseChangeViewType = type;
+                scope.isCompareMaster = type === 'compareWithMasterValue';
+                scope.isComparePublished = type === 'compareWithPublishedValue';
+                scope.isNoCompare = type === 'release';
             }
         }
     }

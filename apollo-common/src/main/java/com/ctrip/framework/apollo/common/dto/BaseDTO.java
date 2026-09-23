@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,10 @@ public class BaseDTO {
 
   protected String dataChangeLastModifiedBy;
 
+  protected String dataChangeCreatedByDisplayName;
+
+  protected String dataChangeLastModifiedByDisplayName;
+
   protected Date dataChangeCreatedTime;
 
   protected Date dataChangeLastModifiedTime;
@@ -43,6 +47,22 @@ public class BaseDTO {
 
   public void setDataChangeLastModifiedBy(String dataChangeLastModifiedBy) {
     this.dataChangeLastModifiedBy = dataChangeLastModifiedBy;
+  }
+
+  public String getDataChangeCreatedByDisplayName() {
+    return dataChangeCreatedByDisplayName;
+  }
+
+  public void setDataChangeCreatedByDisplayName(String dataChangeCreatedByDisplayName) {
+    this.dataChangeCreatedByDisplayName = dataChangeCreatedByDisplayName;
+  }
+
+  public String getDataChangeLastModifiedByDisplayName() {
+    return dataChangeLastModifiedByDisplayName;
+  }
+
+  public void setDataChangeLastModifiedByDisplayName(String dataChangeLastModifiedByDisplayName) {
+    this.dataChangeLastModifiedByDisplayName = dataChangeLastModifiedByDisplayName;
   }
 
   public Date getDataChangeCreatedTime() {

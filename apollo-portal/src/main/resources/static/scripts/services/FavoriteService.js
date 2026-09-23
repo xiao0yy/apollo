@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,20 @@ appService.service('FavoriteService', ['$resource', '$q', 'AppUtil', function ($
     var resource = $resource('', {}, {
         find_favorites: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/favorites',
+            url: AppUtil.prefixPath() + '/openapi/v1/favorites',
             isArray: true
         },
         add_favorite: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/favorites'
+            url: AppUtil.prefixPath() + '/openapi/v1/favorites'
         },
         delete_favorite: {
             method: 'DELETE',
-            url: AppUtil.prefixPath() + '/favorites/:favoriteId'
+            url: AppUtil.prefixPath() + '/openapi/v1/favorites/:favoriteId'
         },
         to_top: {
             method: 'PUT',
-            url: AppUtil.prefixPath() + '/favorites/:favoriteId'
+            url: AppUtil.prefixPath() + '/openapi/v1/favorites/:favoriteId'
         }
     });
     return {

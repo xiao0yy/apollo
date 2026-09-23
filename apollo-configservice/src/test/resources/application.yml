@@ -1,5 +1,5 @@
 #
-# Copyright 2021 Apollo Authors
+# Copyright 2024 Apollo Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,27 +16,21 @@
 spring:
   application:
     name: apollo-configservice
+  lifecycle:
+    timeout-per-shutdown-phase: ${GRACEFUL_SHUTDOWN_TIMEOUT:10s}
 
 server:
   port: ${port:8080}
-  
-logging:
-  level:
-    org.springframework.cloud: 'DEBUG'
-  file:
-    name: /opt/logs/${ctrip.appid}/apollo-configservice.log
-
-ctrip:
-  appid: 100003171
+  shutdown: graceful
 
 eureka:
   instance:
     hostname: ${hostname:localhost}
-    preferIpAddress: true
+    prefer-ip-address: true
     status-page-url-path: /info
     health-check-url-path: /health
   client:
-    serviceUrl:
+    service-url:
       defaultZone: http://${eureka.instance.hostname}:8080/eureka/
     healthcheck:
       enabled: true

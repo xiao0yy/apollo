@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright 2021 Apollo Authors
+# Copyright 2024 Apollo Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@
 #
 SERVICE_NAME=apollo-adminservice
 ## Adjust log dir if necessary
-LOG_DIR=/opt/logs/100003172
+LOG_DIR=${LOG_DIR:=/opt/logs}
 ## Adjust server port if necessary
 SERVER_PORT=${SERVER_PORT:=8090}
+## Adjust context path if necessary
+CONTEXT_PATH=${CONTEXT_PATH:=/}
 
 ## Create log directory if not existed because JDK 8+ won't do that
 mkdir -p $LOG_DIR
+# Create directory of -XX:HeapDumpPath
+mkdir -p $LOG_DIR/HeapDumpOnOutOfMemoryError/
 
 ## Adjust memory settings if necessary
 #export JAVA_OPTS="-Xms2560m -Xmx2560m -Xss256k -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=384m -XX:NewSize=1536m -XX:MaxNewSize=1536m -XX:SurvivorRatio=8"
@@ -43,24 +47,59 @@ export JAVA_OPTS="$JAVA_OPTS -Dserver.port=$SERVER_PORT -Dlogging.file.name=$LOG
 export APP_NAME=$SERVICE_NAME
 
 PATH_TO_JAR=$SERVICE_NAME".jar"
-SERVER_URL="http://localhost:$SERVER_PORT"
+CONTEXT_PATH=$(echo "$CONTEXT_PATH" | sed 's/^\/*//; s/\/*$//')
+SERVER_URL="http://localhost:${SERVER_PORT}${CONTEXT_PATH:+/$CONTEXT_PATH}"
+PID_FILE="$APP_NAME/$APP_NAME.pid"
+EXPECTED_PATTERN="${SERVICE_NAME}(-[^[:space:]]+)?\\.jar"
 
-function checkPidAlive {
-    for i in `ls -t $APP_NAME/$APP_NAME.pid 2>/dev/null`
-    do
-        read pid < $i
+function matches_service_process() {
+    local pid="$1"
+    local command_line
 
-        result=$(ps -p "$pid")
-        if [ "$?" -eq 0 ]; then
+    command_line="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    [[ -n "$command_line" ]] && [[ "$command_line" =~ $EXPECTED_PATTERN ]]
+}
+
+function getPid() {
+    if [[ -f "$PID_FILE" ]]; then
+        read -r pid < "$PID_FILE"
+        if [[ -n "$pid" ]] && matches_service_process "$pid"; then
+            echo "$pid"
             return 0
-        else
-            printf "\npid - $pid just quit unexpectedly, please check logs under $LOG_DIR and /tmp for more information!\n"
-            exit 1;
         fi
-    done
+    fi
+    pgrep -f "$EXPECTED_PATTERN"
+}
 
-    printf "\nNo pid file found, startup may failed. Please check logs under $LOG_DIR and /tmp for more information!\n"
+function checkPidAlive() {
+    if [[ -f "$PID_FILE" ]]; then
+        read -r pid < "$PID_FILE"
+        if [[ -n "$pid" ]] && matches_service_process "$pid"; then
+            return 0
+        fi
+
+        printf "\npid - $pid just quit unexpectedly, please check logs under $LOG_DIR and /tmp for more information!\n"
+        exit 1;
+    fi
+
+    printf "\nNo pid file found, startup may have failed. Please check logs under $LOG_DIR and /tmp for more information!\n"
     exit 1;
+}
+
+function existProcessUsePort() {
+    if [ "$(curl -X GET --silent --connect-timeout 1 --max-time 2 --head $SERVER_URL | grep "HTTP")" != "" ]; then
+        true
+    else
+        false
+    fi
+}
+
+function isServiceRunning() {
+    if [ "$(curl -X GET --silent --connect-timeout 1 --max-time 2 $SERVER_URL/health | grep "UP")" != "" ]; then
+        true
+    else
+        false
+    fi
 }
 
 if [ "$(uname)" == "Darwin" ]; then
@@ -97,14 +136,14 @@ if [[ "$javaexe" ]]; then
     version=$(echo "$version" | awk -F. '{printf("%03d%03d",$1,$2);}')
     # now version is of format 009003 (9.3.x)
     if [ $version -ge 011000 ]; then
-        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
+        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/$SERVICE_NAME.gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
     elif [ $version -ge 010000 ]; then
-        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
+        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/$SERVICE_NAME.gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
     elif [ $version -ge 009000 ]; then
-        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
+        JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:$LOG_DIR/$SERVICE_NAME.gc.log:time,level,tags -Xlog:safepoint -Xlog:gc+heap=trace"
     else
         JAVA_OPTS="$JAVA_OPTS -XX:+UseParNewGC"
-        JAVA_OPTS="$JAVA_OPTS -Xloggc:$LOG_DIR/gc.log -XX:+PrintGCDetails"
+        JAVA_OPTS="$JAVA_OPTS -Xloggc:$LOG_DIR/$SERVICE_NAME.gc.log -XX:+PrintGCDetails"
         JAVA_OPTS="$JAVA_OPTS -XX:+UseConcMarkSweepGC -XX:+UseCMSCompactAtFullCollection -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=60 -XX:+CMSClassUnloadingEnabled -XX:+CMSParallelRemarkEnabled -XX:CMSFullGCsBeforeCompaction=9 -XX:+CMSClassUnloadingEnabled  -XX:+PrintGCDateStamps -XX:+PrintGCApplicationConcurrentTime -XX:+PrintHeapAtGC -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=5M"
     fi
 fi
@@ -120,7 +159,7 @@ do
     fi
 done
 
-if [[ ! -f PATH_TO_JAR && -d current ]]; then
+if [[ ! -f $PATH_TO_JAR && -d current ]]; then
     cd current
     for i in `ls $SERVICE_NAME-*.jar 2>/dev/null`
     do
@@ -136,21 +175,37 @@ fi
 if [[ -n "$APOLLO_RUN_MODE" ]] && [[ "$APOLLO_RUN_MODE" == "Docker" ]]; then
     exec $javaexe -Dsun.misc.URLClassPath.disableJarChecking=true $JAVA_OPTS -jar $PATH_TO_JAR
 else
-    if [[ -f $SERVICE_NAME".jar" ]]; then
-      rm -rf $SERVICE_NAME".jar"
+    # before running check there is another process use port or not
+    if existProcessUsePort; then
+        if isServiceRunning; then
+            echo "$(date) ==== $SERVICE_NAME is running already with port $SERVER_PORT, pid $(getPid)"
+            exit 0
+        else
+            echo "$(date) ==== $SERVICE_NAME failed to start. The port $SERVER_PORT already be in use by another process"
+            echo "maybe you can figure out which process use port $SERVER_PORT by following ways:"
+            echo "1. access http://change-to-this-machine-ip:$SERVER_PORT by browser"
+            echo "2. run command 'curl $SERVER_URL'"
+            echo "3. run command 'sudo netstat -tunlp | grep :$SERVER_PORT'"
+            echo "4. run command 'sudo lsof -nP -iTCP:$SERVER_PORT -sTCP:LISTEN'"
+            exit 1
+        fi
     fi
 
-    printf "$(date) ==== Starting ==== \n"
+    printf "$(date) ==== $SERVICE_NAME Starting ==== \n"
 
-    ln $PATH_TO_JAR $SERVICE_NAME".jar"
-    chmod a+x $SERVICE_NAME".jar"
-    ./$SERVICE_NAME".jar" start
+    mkdir -p $APP_NAME
+    rm -f $APP_NAME/$APP_NAME.pid
 
-    rc=$?;
+    nohup $javaexe -Dsun.misc.URLClassPath.disableJarChecking=true $JAVA_OPTS -jar $PATH_TO_JAR >/dev/null 2>&1 &
+    rc=$?
+    pid=$!
+    if [[ $rc == 0 ]]; then
+        echo $pid > $APP_NAME/$APP_NAME.pid
+    fi
 
     if [[ $rc != 0 ]];
     then
-        echo "$(date) Failed to start $SERVICE_NAME.jar, return code: $rc"
+        echo "$(date) Failed to start $SERVICE_NAME, return code: $rc"
         exit $rc;
     fi
 
@@ -159,24 +214,19 @@ else
     declare -i total_time=0
 
     printf "Waiting for server startup"
-    until [[ (( counter -ge max_counter )) || "$(curl -X GET --silent --connect-timeout 1 --max-time 2 --head $SERVER_URL | grep "HTTP")" != "" ]];
+    until [[ (( counter -ge max_counter )) ]];
     do
         printf "."
-        counter+=1
         sleep 5
+        counter+=1
+        total_time=$((counter*5))
 
         checkPidAlive
+        if isServiceRunning; then
+            printf "\n$(date) Server started in $total_time seconds!\n"
+            exit 0;
+        fi
     done
-
-    total_time=counter*5
-
-    if [[ (( counter -ge max_counter )) ]];
-    then
-        printf "\n$(date) Server failed to start in $total_time seconds!\n"
-        exit 1;
-    fi
-
-    printf "\n$(date) Server started in $total_time seconds!\n"
-
-    exit 0;
+    printf "\n$(date) Server failed to start in $total_time seconds!\n"
+    exit 1;
 fi

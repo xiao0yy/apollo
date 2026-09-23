@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import com.ctrip.framework.apollo.common.exception.BadRequestException;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.portal.api.AdminServiceAPI;
 import com.ctrip.framework.apollo.portal.constant.TracerEventType;
-import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
 import com.ctrip.framework.apollo.tracer.Tracer;
 import org.springframework.stereotype.Service;
 
@@ -30,34 +29,44 @@ import java.util.List;
 @Service
 public class ClusterService {
 
-  private final UserInfoHolder userInfoHolder;
   private final AdminServiceAPI.ClusterAPI clusterAPI;
+  private final RoleInitializationService roleInitializationService;
+  private final RolePermissionService rolePermissionService;
 
-  public ClusterService(final UserInfoHolder userInfoHolder, final AdminServiceAPI.ClusterAPI clusterAPI) {
-    this.userInfoHolder = userInfoHolder;
+  public ClusterService(final AdminServiceAPI.ClusterAPI clusterAPI,
+      RoleInitializationService roleInitializationService,
+      RolePermissionService rolePermissionService) {
     this.clusterAPI = clusterAPI;
+    this.roleInitializationService = roleInitializationService;
+    this.rolePermissionService = rolePermissionService;
   }
 
   public List<ClusterDTO> findClusters(Env env, String appId) {
     return clusterAPI.findClustersByApp(appId, env);
   }
 
-  public ClusterDTO createCluster(Env env, ClusterDTO cluster) {
+  public ClusterDTO createCluster(Env env, ClusterDTO cluster, String operator) {
     if (!clusterAPI.isClusterUnique(cluster.getAppId(), env, cluster.getName())) {
-      throw new BadRequestException(String.format("cluster %s already exists.", cluster.getName()));
+      throw BadRequestException.clusterAlreadyExists(cluster.getName());
     }
     ClusterDTO clusterDTO = clusterAPI.create(env, cluster);
+
+    roleInitializationService.initClusterNamespaceRoles(cluster.getAppId(), env.getName(),
+        cluster.getName(), operator);
 
     Tracer.logEvent(TracerEventType.CREATE_CLUSTER, cluster.getAppId(), "0", cluster.getName());
 
     return clusterDTO;
   }
 
-  public void deleteCluster(Env env, String appId, String clusterName){
-    clusterAPI.delete(env, appId, clusterName, userInfoHolder.getUser().getUserId());
+  public void deleteCluster(Env env, String appId, String clusterName, String operator) {
+    clusterAPI.delete(env, appId, clusterName, operator);
+
+    rolePermissionService.deleteRolePermissionsByCluster(appId, env.getName(), clusterName,
+        operator);
   }
 
-  public ClusterDTO loadCluster(String appId, Env env, String clusterName){
+  public ClusterDTO loadCluster(String appId, Env env, String clusterName) {
     return clusterAPI.loadCluster(appId, env, clusterName);
   }
 

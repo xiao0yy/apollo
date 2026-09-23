@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ appService.service('SystemInfoService', ['$resource', '$q', 'AppUtil', function 
     var system_info_resource = $resource('', {}, {
         load_system_info: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/system-info'
+            url: AppUtil.prefixPath() + '/openapi/v1/system-info'
         },
         check_health: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/system-info/health'
+            url: AppUtil.prefixPath() + '/openapi/v1/system-info/health'
         }
     });
     return {

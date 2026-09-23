@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
  */
 package com.ctrip.framework.apollo.configservice.service.config;
 
+import com.ctrip.framework.apollo.biz.grayReleaseRule.GrayReleaseRulesHolder;
+import com.ctrip.framework.apollo.biz.config.BizConfig;
 import com.ctrip.framework.apollo.core.dto.ApolloNotificationMessages;
 import com.google.common.collect.Lists;
 
@@ -26,12 +28,15 @@ import com.ctrip.framework.apollo.biz.service.ReleaseMessageService;
 import com.ctrip.framework.apollo.biz.service.ReleaseService;
 import com.ctrip.framework.apollo.biz.utils.ReleaseMessageKeyGenerator;
 
+import com.google.common.collect.Sets;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Map;
+import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -55,6 +60,12 @@ public class ConfigServiceWithCacheTest {
   private Release someRelease;
   @Mock
   private ReleaseMessage someReleaseMessage;
+  @Mock
+  private BizConfig bizConfig;
+  @Mock
+  private MeterRegistry meterRegistry;
+  @Mock
+  private GrayReleaseRulesHolder grayReleaseRulesHolder;
 
   private String someAppId;
   private String someClusterName;
@@ -65,9 +76,8 @@ public class ConfigServiceWithCacheTest {
 
   @Before
   public void setUp() throws Exception {
-    configServiceWithCache = new ConfigServiceWithCache();
-    ReflectionTestUtils.setField(configServiceWithCache, "releaseService", releaseService);
-    ReflectionTestUtils.setField(configServiceWithCache, "releaseMessageService", releaseMessageService);
+    configServiceWithCache = new ConfigServiceWithCache(releaseService, releaseMessageService,
+        grayReleaseRulesHolder, bizConfig, meterRegistry);
 
     configServiceWithCache.initialize();
 
@@ -87,9 +97,29 @@ public class ConfigServiceWithCacheTest {
 
     when(releaseService.findActiveOne(someId)).thenReturn(someRelease);
 
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
 
     verify(releaseService, times(1)).findActiveOne(someId);
+  }
+
+  @Test
+  public void testFindReleasesByReleaseKeys() {
+    String someReleaseKey = "someReleaseKey";
+    long someId = 1;
+    Set<String> someReleaseKeys = Sets.newHashSet(someReleaseKey);
+
+    when(releaseService.findByReleaseKey(someReleaseKey)).thenReturn(someRelease);
+    when(releaseService.findActiveOne(someId)).thenReturn(someRelease);
+    when(someRelease.getId()).thenReturn(someId);
+
+    Map<String, Release> someReleaseMap = null;
+
+    someReleaseMap = configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys);
+
+    assertEquals(1, someReleaseMap.size());
+    assertEquals(someRelease, someReleaseMap.get(someReleaseKey));
+    verify(releaseService, times(1)).findByReleaseKey(someReleaseKey);
   }
 
   @Test
@@ -98,10 +128,39 @@ public class ConfigServiceWithCacheTest {
 
     when(releaseService.findActiveOne(someId)).thenReturn(someRelease);
 
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
 
+    verify(releaseService, times(1)).findActiveOne(someId);
+  }
+
+  @Test
+  public void testFindReleasesByReleaseKeysWithSameIdMultipleTimes() {
+    String someReleaseKey = "someReleaseKey";
+    long someId = 1;
+    Set<String> someReleaseKeys = Sets.newHashSet(someReleaseKey);
+
+    when(releaseService.findByReleaseKey(someReleaseKey)).thenReturn(someRelease);
+    when(releaseService.findActiveOne(someId)).thenReturn(someRelease);
+    when(someRelease.getId()).thenReturn(someId);
+
+    Map<String, Release> someReleaseMap = null;
+    Map<String, Release> otherReleaseMap = null;
+    someReleaseMap = configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys);
+    otherReleaseMap = configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys);
+
+
+    assertEquals(1, someReleaseMap.size());
+    assertEquals(someRelease, someReleaseMap.get(someReleaseKey));
+
+    assertEquals(1, otherReleaseMap.size());
+    assertEquals(someRelease, otherReleaseMap.get(someReleaseKey));
+
+    verify(releaseService, times(1)).findByReleaseKey(someReleaseKey);
     verify(releaseService, times(1)).findActiveOne(someId);
   }
 
@@ -114,14 +173,32 @@ public class ConfigServiceWithCacheTest {
     when(releaseService.findActiveOne(someId)).thenReturn(someRelease);
     when(releaseService.findActiveOne(anotherId)).thenReturn(anotherRelease);
 
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
-    assertEquals(someRelease, configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
+    assertEquals(someRelease,
+        configServiceWithCache.findActiveOne(someId, someNotificationMessages));
 
-    assertEquals(anotherRelease, configServiceWithCache.findActiveOne(anotherId, someNotificationMessages));
-    assertEquals(anotherRelease, configServiceWithCache.findActiveOne(anotherId, someNotificationMessages));
+    assertEquals(anotherRelease,
+        configServiceWithCache.findActiveOne(anotherId, someNotificationMessages));
+    assertEquals(anotherRelease,
+        configServiceWithCache.findActiveOne(anotherId, someNotificationMessages));
 
     verify(releaseService, times(1)).findActiveOne(someId);
     verify(releaseService, times(1)).findActiveOne(anotherId);
+  }
+
+  @Test
+  public void testFindReleasesByReleaseKeysNotFoundMultipleTimes() throws Exception {
+    String someReleaseKey = "someReleaseKey";
+    Set<String> someReleaseKeys = Sets.newHashSet(someReleaseKey);
+
+    when(releaseService.findByReleaseKey(someReleaseKey)).thenReturn(null);
+
+    assertEquals(0, configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys).size());
+    assertEquals(0, configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys).size());
+    assertEquals(0, configServiceWithCache.findReleasesByReleaseKeys(someReleaseKeys).size());
+
+    verify(releaseService, times(1)).findByReleaseKey(someReleaseKey);
   }
 
   @Test
@@ -194,35 +271,37 @@ public class ConfigServiceWithCacheTest {
     ReleaseMessage anotherReleaseMessage = mock(ReleaseMessage.class);
     Release anotherRelease = mock(Release.class);
 
-    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey))).thenReturn
-        (someReleaseMessage);
-    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName)).thenReturn
-        (someRelease);
+    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey)))
+        .thenReturn(someReleaseMessage);
+    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName))
+        .thenReturn(someRelease);
     when(someReleaseMessage.getId()).thenReturn(someNotificationId);
 
-    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName,
-        someNotificationMessages);
+    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
+        someNamespaceName, someNotificationMessages);
 
-    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey))).thenReturn
-        (anotherReleaseMessage);
-    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName)).thenReturn
-        (anotherRelease);
+    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey)))
+        .thenReturn(anotherReleaseMessage);
+    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName))
+        .thenReturn(anotherRelease);
     when(anotherReleaseMessage.getId()).thenReturn(someNewNotificationId);
 
-    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
-        someNamespaceName, someNotificationMessages);
+    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     someNotificationMessages.put(someKey, someNewNotificationId);
 
-    Release shouldBeNewRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
-        someNamespaceName, someNotificationMessages);
+    Release shouldBeNewRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     assertEquals(someRelease, release);
     assertEquals(someRelease, stillOldRelease);
     assertEquals(anotherRelease, shouldBeNewRelease);
 
-    verify(releaseMessageService, times(2)).findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
-    verify(releaseService, times(2)).findLatestActiveRelease(someAppId, someClusterName, someNamespaceName);
+    verify(releaseMessageService, times(2))
+        .findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
+    verify(releaseService, times(2)).findLatestActiveRelease(someAppId, someClusterName,
+        someNamespaceName);
   }
 
   @Test
@@ -231,36 +310,38 @@ public class ConfigServiceWithCacheTest {
     ReleaseMessage anotherReleaseMessage = mock(ReleaseMessage.class);
     Release anotherRelease = mock(Release.class);
 
-    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey))).thenReturn
-        (someReleaseMessage);
-    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName)).thenReturn
-        (someRelease);
+    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey)))
+        .thenReturn(someReleaseMessage);
+    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName))
+        .thenReturn(someRelease);
     when(someReleaseMessage.getId()).thenReturn(someNotificationId);
 
-    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName,
-        someNotificationMessages);
+    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
+        someNamespaceName, someNotificationMessages);
 
-    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey))).thenReturn
-        (anotherReleaseMessage);
-    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName)).thenReturn
-        (anotherRelease);
+    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey)))
+        .thenReturn(anotherReleaseMessage);
+    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName))
+        .thenReturn(anotherRelease);
     when(anotherReleaseMessage.getMessage()).thenReturn(someKey);
     when(anotherReleaseMessage.getId()).thenReturn(someNewNotificationId);
 
-    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
-        someNamespaceName, someNotificationMessages);
+    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     configServiceWithCache.handleMessage(anotherReleaseMessage, Topics.APOLLO_RELEASE_TOPIC);
 
-    Release shouldBeNewRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
-        someNamespaceName, someNotificationMessages);
+    Release shouldBeNewRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     assertEquals(someRelease, release);
     assertEquals(someRelease, stillOldRelease);
     assertEquals(anotherRelease, shouldBeNewRelease);
 
-    verify(releaseMessageService, times(2)).findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
-    verify(releaseService, times(2)).findLatestActiveRelease(someAppId, someClusterName, someNamespaceName);
+    verify(releaseMessageService, times(2))
+        .findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
+    verify(releaseService, times(2)).findLatestActiveRelease(someAppId, someClusterName,
+        someNamespaceName);
   }
 
   @Test
@@ -268,28 +349,30 @@ public class ConfigServiceWithCacheTest {
     long someNewNotificationId = someNotificationId + 1;
     String someIrrelevantKey = "someIrrelevantKey";
 
-    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey))).thenReturn
-        (someReleaseMessage);
-    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName)).thenReturn
-        (someRelease);
+    when(releaseMessageService.findLatestReleaseMessageForMessages(Lists.newArrayList(someKey)))
+        .thenReturn(someReleaseMessage);
+    when(releaseService.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName))
+        .thenReturn(someRelease);
     when(someReleaseMessage.getId()).thenReturn(someNotificationId);
 
-    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName, someNamespaceName,
-        someNotificationMessages);
-
-    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
+    Release release = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
         someNamespaceName, someNotificationMessages);
+
+    Release stillOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     someNotificationMessages.put(someIrrelevantKey, someNewNotificationId);
 
-    Release shouldStillBeOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId, someClusterName,
-        someNamespaceName, someNotificationMessages);
+    Release shouldStillBeOldRelease = configServiceWithCache.findLatestActiveRelease(someAppId,
+        someClusterName, someNamespaceName, someNotificationMessages);
 
     assertEquals(someRelease, release);
     assertEquals(someRelease, stillOldRelease);
     assertEquals(someRelease, shouldStillBeOldRelease);
 
-    verify(releaseMessageService, times(1)).findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
-    verify(releaseService, times(1)).findLatestActiveRelease(someAppId, someClusterName, someNamespaceName);
+    verify(releaseMessageService, times(1))
+        .findLatestReleaseMessageForMessages(Lists.newArrayList(someKey));
+    verify(releaseService, times(1)).findLatestActiveRelease(someAppId, someClusterName,
+        someNamespaceName);
   }
 }

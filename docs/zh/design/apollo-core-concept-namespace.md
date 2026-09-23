@@ -19,7 +19,7 @@ Apollo在创建项目的时候，都会默认创建一个“application”的Nam
 ### 3. Namespace的格式有哪些？
 配置文件有多种格式，例如：properties、xml、yml、yaml、json等。同样Namespace也具有这些格式。在Portal UI中可以看到“application”的Namespace上有一个“properties”标签，表明“application”是properties格式的。
 
->注1：非properties格式的namespace，在客户端使用时需要调用`ConfigService.getConfigFile(String namespace, ConfigFileFormat configFileFormat)`来获取，如果使用[Http接口直接调用](zh/usage/other-language-client-user-guide#_12-通过带缓存的http接口从apollo读取配置)时，对应的namespace参数需要传入namespace的名字加上后缀名，如datasources.json。
+>注1：非properties格式的namespace，在客户端使用时需要调用`ConfigService.getConfigFile(String namespace, ConfigFileFormat configFileFormat)`来获取，如果使用[Http接口直接调用](zh/client/other-language-client-user-guide#_12-通过带缓存的http接口从apollo读取配置)时，对应的namespace参数需要传入namespace的名字加上后缀名，如datasources.json。
 
 >注2：apollo-client 1.3.0版本开始对yaml/yml做了更好的支持，使用起来和properties格式一致：`Config config = ConfigService.getConfig("application.yml");`，Spring的注入方式也和properties一致。
 
@@ -44,7 +44,8 @@ Namespace类型有三种：
   * 私有类型
   * 公共类型  
   * 关联类型（继承类型）
-  
+
+
 #### 5.1 私有类型
 私有类型的Namespace具有private权限。例如上文提到的“application” Namespace就是私有类型。
 
@@ -60,7 +61,7 @@ Namespace类型有三种：
   * 小组级别共享的配置
   * 几个项目之间共享的配置
   * 中间件客户端的配置
-  
+
 
 #### 5.3 关联类型
 
@@ -94,7 +95,7 @@ k2 = v2
  * 应用B有一个私有类型的Namespace：application，以及一个公共类型的Namespace：NS-Public。
  * 应用C只有一个私有类型的Namespace：application
  
-![Namespace例子](https://raw.githubusercontent.com/ctripcorp/apollo/master/doc/images/namespace-model-example.png)
+![Namespace例子](https://cdn.jsdelivr.net/gh/apolloconfig/apollo@master/doc/images/namespace-model-example.png)
 
 ##### 5.4.1 应用A获取Apollo配置
 ```java

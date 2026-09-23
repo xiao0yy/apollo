@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,41 +20,41 @@ import com.google.common.base.MoreObjects;
 
 import java.util.Date;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.PrePersist;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
 @Entity
-@Table(name = "Instance")
+@Table(name = "`Instance`")
 public class Instance {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "Id")
+  @Column(name = "`Id`")
   private long id;
 
-  @Column(name = "AppId", nullable = false)
+  @Column(name = "`AppId`", nullable = false)
   private String appId;
 
-  @Column(name = "ClusterName", nullable = false)
+  @Column(name = "`ClusterName`", nullable = false)
   private String clusterName;
 
-  @Column(name = "DataCenter", nullable = false)
+  @Column(name = "`DataCenter`", nullable = false)
   private String dataCenter;
 
-  @Column(name = "Ip", nullable = false)
+  @Column(name = "`Ip`", nullable = false)
   private String ip;
 
-  @Column(name = "DataChange_CreatedTime", nullable = false)
+  @Column(name = "`DataChange_CreatedTime`", nullable = false)
   private Date dataChangeCreatedTime;
 
-  @Column(name = "DataChange_LastTime")
+  @Column(name = "`DataChange_LastTime`")
   private Date dataChangeLastModifiedTime;
 
   @PrePersist
@@ -125,15 +125,9 @@ public class Instance {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .omitNullValues()
-        .add("id", id)
-        .add("appId", appId)
-        .add("clusterName", clusterName)
-        .add("dataCenter", dataCenter)
-        .add("ip", ip)
+    return MoreObjects.toStringHelper(this).omitNullValues().add("id", id).add("appId", appId)
+        .add("clusterName", clusterName).add("dataCenter", dataCenter).add("ip", ip)
         .add("dataChangeCreatedTime", dataChangeCreatedTime)
-        .add("dataChangeLastModifiedTime", dataChangeLastModifiedTime)
-        .toString();
+        .add("dataChangeLastModifiedTime", dataChangeLastModifiedTime).toString();
   }
 }

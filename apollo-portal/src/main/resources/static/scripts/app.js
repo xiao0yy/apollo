@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,19 +63,25 @@ var diff_item_module = angular.module('diff_item', ['app.service', 'apollo.direc
 //namespace
 var namespace_module = angular.module('namespace', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
 //server config
-var server_config_module = angular.module('server_config', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+var server_config_manage_module = angular.module('server_config_manage', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+// Value的全局检索
+var global_search_value_module = angular.module('global_search_value', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'ngSanitize']);
 //setting
 var setting_module = angular.module('setting', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
 //role
 var role_module = angular.module('role', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //cluster
 var cluster_module = angular.module('cluster', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
+//manage_cluster
+var manage_cluster_module = angular.module('manage_cluster', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
 //release history
 var release_history_module = angular.module('release_history', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //open manage
 var open_manage_module = angular.module('open_manage', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //user
 var user_module = angular.module('user', ['apollo.directive', 'toastr', 'app.service', 'app.util', 'angular-loading-bar', 'valdr']);
+//user token
+var user_token_module = angular.module('user_token', ['apollo.directive', 'toastr', 'app.service', 'app.util', 'angular-loading-bar']);
 //login
 var login_module = angular.module('login', ['app.service', 'toastr', 'app.util', 'pascalprecht.translate']);
 //delete app cluster namespace
@@ -86,3 +92,7 @@ var system_info_module = angular.module('system_info', ['app.service', 'apollo.d
 var access_key_module = angular.module('access_key', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //config export
 var config_export_module = angular.module('config_export', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+//audit log menu
+var audit_log_menu_module = angular.module('audit_log', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+//audit log trace detail
+var audit_log_trace_detail_module = angular.module('audit_log_trace_detail', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);

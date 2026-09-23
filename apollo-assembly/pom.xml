@@ -1,6 +1,6 @@
 <?xml version="1.0"  encoding="UTF-8"?>
 <!--
-  ~ Copyright 2021 Apollo Authors
+  ~ Copyright 2024 Apollo Authors
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -43,14 +43,37 @@
 			<groupId>com.ctrip.framework.apollo</groupId>
 			<artifactId>apollo-portal</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 	<build>
 		<plugins>
+			<plugin>
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-resources-plugin</artifactId>
+			<version>3.2.0</version>
+			<executions>
+				<execution>
+					<id>copy-resources</id>
+					<phase>validate</phase>
+					<goals>
+						<goal>copy-resources</goal>
+					</goals>
+					<configuration>
+						<outputDirectory>${project.build.directory}/classes/META-INF/sql/profiles</outputDirectory>
+						<resources>
+							<resource>
+								<directory>${project.parent.basedir}/scripts/sql/profiles</directory>
+								<includes>
+									<include>h2-default/apolloconfigdb.sql</include>
+									<include>h2-default/apolloportaldb.sql</include>
+									<include>mysql-database-not-specified/apolloconfigdb.sql</include>
+									<include>mysql-database-not-specified/apolloportaldb.sql</include>
+								</includes>
+							</resource>
+						</resources>
+					</configuration>
+				</execution>
+			</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

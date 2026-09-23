@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import com.ctrip.framework.apollo.portal.entity.po.Permission;
 import com.ctrip.framework.apollo.portal.entity.po.RolePermission;
 import com.ctrip.framework.apollo.portal.repository.PermissionRepository;
 import com.ctrip.framework.apollo.portal.repository.RolePermissionRepository;
+import com.google.common.collect.Sets;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -38,8 +39,7 @@ public class ConsumerRolePermissionService {
   private final ConsumerRoleRepository consumerRoleRepository;
   private final RolePermissionRepository rolePermissionRepository;
 
-  public ConsumerRolePermissionService(
-      final PermissionRepository permissionRepository,
+  public ConsumerRolePermissionService(final PermissionRepository permissionRepository,
       final ConsumerRoleRepository consumerRoleRepository,
       final RolePermissionRepository rolePermissionRepository) {
     this.permissionRepository = permissionRepository;
@@ -76,5 +76,20 @@ public class ConsumerRolePermissionService {
     }
 
     return false;
+  }
+
+  public boolean hasAnyPermission(long consumerId, List<Permission> permissions) {
+    if (CollectionUtils.isEmpty(permissions)) {
+      return false;
+    }
+    List<Permission> consumerPermissions = permissionRepository.findConsumerPermissions(consumerId);
+
+    if (CollectionUtils.isEmpty(consumerPermissions)) {
+      return false;
+    }
+
+    Set<Permission> userPermissionSet = Sets.newHashSet(consumerPermissions);
+
+    return permissions.stream().anyMatch(userPermissionSet::contains);
   }
 }

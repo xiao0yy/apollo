@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,27 +17,35 @@
 package com.ctrip.framework.apollo.portal.entity.po;
 
 import com.ctrip.framework.apollo.common.entity.BaseEntity;
-
+import java.util.Objects;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
-
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Table;
+import org.hibernate.annotations.SQLRestriction;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
 @Entity
-@Table(name = "Permission")
-@SQLDelete(sql = "Update Permission set isDeleted = 1 where id = ?")
-@Where(clause = "isDeleted = 0")
+@Table(name = "`Permission`")
+@SQLDelete(
+    sql = "Update `Permission` set IsDeleted = true, DeletedAt = ROUND(UNIX_TIMESTAMP(NOW(4))*1000) where Id = ?")
+@SQLRestriction("`IsDeleted` = false")
 public class Permission extends BaseEntity {
-  @Column(name = "PermissionType", nullable = false)
+
+  @Column(name = "`PermissionType`", nullable = false)
   private String permissionType;
 
-  @Column(name = "TargetId", nullable = false)
+  @Column(name = "`TargetId`", nullable = false)
   private String targetId;
+
+  public Permission() {}
+
+  public Permission(String permissionType, String targetId) {
+    this.permissionType = permissionType;
+    this.targetId = targetId;
+  }
 
   public String getPermissionType() {
     return permissionType;
@@ -54,4 +62,23 @@ public class Permission extends BaseEntity {
   public void setTargetId(String targetId) {
     this.targetId = targetId;
   }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof Permission)) {
+      return false;
+    }
+    Permission that = (Permission) o;
+    return Objects.equals(permissionType, that.permissionType)
+        && Objects.equals(targetId, that.targetId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(permissionType, targetId);
+  }
+
 }

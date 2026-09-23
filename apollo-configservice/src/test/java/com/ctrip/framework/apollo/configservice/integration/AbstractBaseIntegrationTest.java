@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package com.ctrip.framework.apollo.configservice.integration;
 
 import com.ctrip.framework.apollo.biz.service.BizDBPropertySource;
+import com.ctrip.framework.apollo.core.ConfigConsts;
+import com.google.common.base.Joiner;
 import com.google.gson.Gson;
 
 import com.ctrip.framework.apollo.ConfigServiceTestConfiguration;
@@ -31,29 +33,35 @@ import com.ctrip.framework.apollo.biz.utils.ReleaseKeyGenerator;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriTemplateHandler;
 
+import java.net.URI;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 /**
  * @author Jason Song(song_s@ctrip.com)
  */
 @RunWith(SpringJUnit4ClassRunner.class)
-@SpringBootTest(classes = AbstractBaseIntegrationTest.TestConfiguration.class, webEnvironment = WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = AbstractBaseIntegrationTest.TestConfiguration.class,
+    webEnvironment = WebEnvironment.RANDOM_PORT)
 public abstract class AbstractBaseIntegrationTest {
   @Autowired
   private ReleaseMessageRepository releaseMessageRepository;
@@ -62,11 +70,14 @@ public abstract class AbstractBaseIntegrationTest {
 
   private static final Gson GSON = new Gson();
 
-  protected RestTemplate restTemplate = (new TestRestTemplate()).getRestTemplate();
+  protected RestTemplate restTemplate =
+      new RestTemplateBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
   @PostConstruct
   private void postConstruct() {
     restTemplate.setErrorHandler(new DefaultResponseErrorHandler());
+    restTemplate
+        .setUriTemplateHandler(new BaseUrlUriTemplateHandler(restTemplate.getUriTemplateHandler()));
   }
 
   @Value("${local.server.port}")
@@ -91,7 +102,7 @@ public abstract class AbstractBaseIntegrationTest {
   }
 
   public Release buildRelease(String name, String comment, Namespace namespace,
-                              Map<String, String> configurations, String owner) {
+      Map<String, String> configurations, String owner) {
     Release release = new Release();
     release.setReleaseKey(ReleaseKeyGenerator.generateReleaseKey(namespace));
     release.setDataChangeCreatedTime(new Date());
@@ -108,16 +119,17 @@ public abstract class AbstractBaseIntegrationTest {
     return release;
   }
 
-  protected void periodicSendMessage(ExecutorService executorService, String message, AtomicBoolean stop) {
+  protected void periodicSendMessage(ExecutorService executorService, String message,
+      AtomicBoolean stop) {
     executorService.submit(() -> {
-      //wait for the request connected to server
+      // wait for the request connected to server
       while (!stop.get() && !Thread.currentThread().isInterrupted()) {
         try {
           TimeUnit.MILLISECONDS.sleep(100);
         } catch (InterruptedException e) {
         }
 
-        //double check
+        // double check
         if (stop.get()) {
           break;
         }
@@ -134,13 +146,50 @@ public abstract class AbstractBaseIntegrationTest {
 
     @Override
     public int appNamespaceCacheScanInterval() {
-      //should be short enough to update the AppNamespace cache in time
+      // should be short enough to update the AppNamespace cache in time
       return 1;
     }
 
     @Override
     public TimeUnit appNamespaceCacheScanIntervalTimeUnit() {
       return TimeUnit.MILLISECONDS;
+    }
+  }
+
+  protected String assembleKey(String appId, String cluster, String namespace) {
+    return Joiner.on(ConfigConsts.CLUSTER_NAMESPACE_SEPARATOR).join(appId, cluster, namespace);
+  }
+
+  private static class BaseUrlUriTemplateHandler implements UriTemplateHandler {
+
+    private static final String BASE_URL_VARIABLE = "{baseurl}";
+
+    private final UriTemplateHandler delegate;
+
+    private BaseUrlUriTemplateHandler(UriTemplateHandler delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public URI expand(String uriTemplate, Map<String, ?> uriVariables) {
+      if (!uriTemplate.contains(BASE_URL_VARIABLE) || !uriVariables.containsKey("baseurl")) {
+        return delegate.expand(uriTemplate, uriVariables);
+      }
+      Map<String, Object> remainingUriVariables = new LinkedHashMap<>(uriVariables);
+      Object baseUrl = remainingUriVariables.remove("baseurl");
+      return delegate.expand(uriTemplate.replace(BASE_URL_VARIABLE, String.valueOf(baseUrl)),
+          remainingUriVariables);
+    }
+
+    @Override
+    public URI expand(String uriTemplate, Object... uriVariables) {
+      if (!uriTemplate.contains(BASE_URL_VARIABLE) || uriVariables.length == 0) {
+        return delegate.expand(uriTemplate, uriVariables);
+      }
+      Object[] remainingUriVariables = Arrays.copyOfRange(uriVariables, 1, uriVariables.length);
+      return delegate.expand(
+          uriTemplate.replace(BASE_URL_VARIABLE, String.valueOf(uriVariables[0])),
+          remainingUriVariables);
     }
   }
 }

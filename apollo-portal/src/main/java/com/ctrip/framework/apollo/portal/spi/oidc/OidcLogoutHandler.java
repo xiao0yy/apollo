@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package com.ctrip.framework.apollo.portal.spi.oidc;
 
 import com.ctrip.framework.apollo.portal.spi.LogoutHandler;
-import java.io.IOException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * @author vdisk <vdisk@foxmail.com>
@@ -28,10 +28,6 @@ public class OidcLogoutHandler implements LogoutHandler {
 
   @Override
   public void logout(HttpServletRequest request, HttpServletResponse response) {
-    try {
-      response.sendRedirect(request.getContextPath() + "/logout");
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    // do nothing here
   }
 }

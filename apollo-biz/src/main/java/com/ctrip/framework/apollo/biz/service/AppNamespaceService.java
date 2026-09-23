@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
  */
 package com.ctrip.framework.apollo.biz.service;
 
+import com.ctrip.framework.apollo.audit.annotation.ApolloAuditLog;
+import com.ctrip.framework.apollo.audit.annotation.OpType;
 import com.ctrip.framework.apollo.biz.entity.Audit;
 import com.ctrip.framework.apollo.biz.entity.Cluster;
 import com.ctrip.framework.apollo.biz.entity.Namespace;
@@ -49,10 +51,8 @@ public class AppNamespaceService {
   private final ClusterService clusterService;
   private final AuditService auditService;
 
-  public AppNamespaceService(
-      final AppNamespaceRepository appNamespaceRepository,
-      final @Lazy NamespaceService namespaceService,
-      final @Lazy ClusterService clusterService,
+  public AppNamespaceService(final AppNamespaceRepository appNamespaceRepository,
+      final @Lazy NamespaceService namespaceService, final @Lazy ClusterService clusterService,
       final AuditService auditService) {
     this.appNamespaceRepository = appNamespaceRepository;
     this.namespaceService = namespaceService;
@@ -72,7 +72,7 @@ public class AppNamespaceService {
   }
 
   public List<AppNamespace> findByAppId(String appId) {
-    return appNamespaceRepository.findByAppId(appId);
+    return appNamespaceRepository.findByAppIdOrderByIdAsc(appId);
   }
 
   public List<AppNamespace> findPublicNamespacesByNames(Set<String> namespaceNames) {
@@ -88,8 +88,8 @@ public class AppNamespaceService {
   }
 
   public AppNamespace findOne(String appId, String namespaceName) {
-    Preconditions
-        .checkArgument(!StringUtils.isContainEmpty(appId, namespaceName), "appId or Namespace must not be null");
+    Preconditions.checkArgument(!StringUtils.isContainEmpty(appId, namespaceName),
+        "appId or Namespace must not be null");
     return appNamespaceRepository.findByAppIdAndName(appId, namespaceName);
   }
 
@@ -102,6 +102,7 @@ public class AppNamespaceService {
   }
 
   @Transactional
+  @ApolloAuditLog(type = OpType.CREATE, name = "AppNamespace.createDefault")
   public void createDefaultAppNamespace(String appId, String createBy) {
     if (!isAppNamespaceNameUnique(appId, ConfigConsts.NAMESPACE_APPLICATION)) {
       throw new ServiceException("appnamespace not unique");
@@ -116,7 +117,7 @@ public class AppNamespaceService {
     appNamespaceRepository.save(appNs);
 
     auditService.audit(AppNamespace.class.getSimpleName(), appNs.getId(), Audit.OP.INSERT,
-                       createBy);
+        createBy);
   }
 
   @Transactional
@@ -125,35 +126,40 @@ public class AppNamespaceService {
     if (!isAppNamespaceNameUnique(appNamespace.getAppId(), appNamespace.getName())) {
       throw new ServiceException("appnamespace not unique");
     }
-    appNamespace.setId(0);//protection
+    appNamespace.setId(0);// protection
     appNamespace.setDataChangeCreatedBy(createBy);
     appNamespace.setDataChangeLastModifiedBy(createBy);
 
     appNamespace = appNamespaceRepository.save(appNamespace);
 
-    createNamespaceForAppNamespaceInAllCluster(appNamespace.getAppId(), appNamespace.getName(), createBy);
+    createNamespaceForAppNamespaceInAllCluster(appNamespace.getAppId(), appNamespace.getName(),
+        createBy);
 
-    auditService.audit(AppNamespace.class.getSimpleName(), appNamespace.getId(), Audit.OP.INSERT, createBy);
+    auditService.audit(AppNamespace.class.getSimpleName(), appNamespace.getId(), Audit.OP.INSERT,
+        createBy);
     return appNamespace;
   }
 
   public AppNamespace update(AppNamespace appNamespace) {
-    AppNamespace managedNs = appNamespaceRepository.findByAppIdAndName(appNamespace.getAppId(), appNamespace.getName());
+    AppNamespace managedNs =
+        appNamespaceRepository.findByAppIdAndName(appNamespace.getAppId(), appNamespace.getName());
     BeanUtils.copyEntityProperties(appNamespace, managedNs);
     managedNs = appNamespaceRepository.save(managedNs);
 
     auditService.audit(AppNamespace.class.getSimpleName(), managedNs.getId(), Audit.OP.UPDATE,
-                       managedNs.getDataChangeLastModifiedBy());
+        managedNs.getDataChangeLastModifiedBy());
 
     return managedNs;
   }
 
-  public void createNamespaceForAppNamespaceInAllCluster(String appId, String namespaceName, String createBy) {
+  public void createNamespaceForAppNamespaceInAllCluster(String appId, String namespaceName,
+      String createBy) {
     List<Cluster> clusters = clusterService.findParentClusters(appId);
 
     for (Cluster cluster : clusters) {
 
-      // in case there is some dirty data, e.g. public namespace deleted in other app and now created in this app
+      // in case there is some dirty data, e.g. public namespace deleted in other app and now
+      // created in this app
       if (!namespaceService.isNamespaceUnique(appId, cluster.getName(), namespaceName)) {
         continue;
       }
@@ -179,7 +185,8 @@ public class AppNamespaceService {
     String appId = appNamespace.getAppId();
     String namespaceName = appNamespace.getName();
 
-    logger.info("{} is deleting AppNamespace, appId: {}, namespace: {}", operator, appId, namespaceName);
+    logger.info("{} is deleting AppNamespace, appId: {}, namespace: {}", operator, appId,
+        namespaceName);
 
     // 1. delete namespaces
     List<Namespace> namespaces = namespaceService.findByAppIdAndNamespaceName(appId, namespaceName);

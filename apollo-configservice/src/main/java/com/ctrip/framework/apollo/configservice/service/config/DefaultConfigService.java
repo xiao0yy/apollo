@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,14 @@ package com.ctrip.framework.apollo.configservice.service.config;
 
 import com.ctrip.framework.apollo.biz.entity.Release;
 import com.ctrip.framework.apollo.biz.entity.ReleaseMessage;
+import com.ctrip.framework.apollo.biz.grayReleaseRule.GrayReleaseRulesHolder;
 import com.ctrip.framework.apollo.biz.service.ReleaseService;
 import com.ctrip.framework.apollo.core.dto.ApolloNotificationMessages;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import com.google.common.collect.ImmutableMap;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * config service with no cache
@@ -30,8 +34,15 @@ import org.springframework.beans.factory.annotation.Autowired;
  */
 public class DefaultConfigService extends AbstractConfigService {
 
-  @Autowired
-  private ReleaseService releaseService;
+  private final ReleaseService releaseService;
+  private final GrayReleaseRulesHolder grayReleaseRulesHolder;
+
+  public DefaultConfigService(final ReleaseService releaseService,
+      final GrayReleaseRulesHolder grayReleaseRulesHolder) {
+    super(grayReleaseRulesHolder);
+    this.releaseService = releaseService;
+    this.grayReleaseRulesHolder = grayReleaseRulesHolder;
+  }
 
   @Override
   protected Release findActiveOne(long id, ApolloNotificationMessages clientMessages) {
@@ -39,14 +50,23 @@ public class DefaultConfigService extends AbstractConfigService {
   }
 
   @Override
-  protected Release findLatestActiveRelease(String configAppId, String configClusterName, String configNamespace,
-                                            ApolloNotificationMessages clientMessages) {
-    return releaseService.findLatestActiveRelease(configAppId, configClusterName,
-        configNamespace);
+  protected Release findLatestActiveRelease(String configAppId, String configClusterName,
+      String configNamespace, ApolloNotificationMessages clientMessages) {
+    return releaseService.findLatestActiveRelease(configAppId, configClusterName, configNamespace);
   }
 
   @Override
   public void handleMessage(ReleaseMessage message, String channel) {
     // since there is no cache, so do nothing
+  }
+
+  @Override
+  public Map<String, Release> findReleasesByReleaseKeys(Set<String> releaseKeys) {
+    List<Release> releasesMap = releaseService.findByReleaseKeys(releaseKeys);
+    if (releasesMap != null) {
+      return releasesMap.stream()
+          .collect(ImmutableMap.toImmutableMap(Release::getReleaseKey, release -> release));
+    }
+    return Collections.emptyMap();
   }
 }

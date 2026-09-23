@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,18 @@ appService.service('CommitService', ['$resource', '$q','AppUtil', function ($res
         find_commits: {
             method: 'GET',
             isArray: true,
-            url: AppUtil.prefixPath() + '/apps/:appId/envs/:env/clusters/:clusterName/namespaces/:namespaceName/commits?page=:page'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/envs/:env/clusters/:clusterName/namespaces/:namespaceName/commits?page=:page'
         }
     });
     return {
-        find_commits: function (appId, env, clusterName, namespaceName, page, size) {
+        find_commits: function (appId, env, clusterName, namespaceName, key, page, size) {
             var d = $q.defer();
             commit_resource.find_commits({
                                              appId: appId,
                                              env: env,
                                              clusterName: clusterName,
                                              namespaceName: namespaceName,
+                                             key: key,
                                              page: page,
                                              size: size
                                          },

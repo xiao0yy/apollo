@@ -1,5 +1,5 @@
 --
--- Copyright 2021 Apollo Authors
+-- Copyright 2024 Apollo Authors
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -13,11 +13,17 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
-delete from Permission;
-delete from Role;
-delete from RolePermission;
-delete from UserRole;
-delete from AppNamespace;
-DELETE FROM Favorite;
-DELETE FROM ServerConfig;
-DELETE FROM App;
+DELETE FROM "App";
+DELETE FROM "AppNamespace";
+DELETE FROM "Authorities";
+DELETE FROM "Consumer";
+DELETE FROM "ConsumerAudit";
+DELETE FROM "ConsumerRole";
+DELETE FROM "ConsumerToken";
+DELETE FROM "Favorite";
+DELETE FROM "Permission";
+DELETE FROM "Role";
+DELETE FROM "RolePermission";
+DELETE FROM "ServerConfig";
+DELETE FROM "UserRole";
+DELETE FROM "Users";

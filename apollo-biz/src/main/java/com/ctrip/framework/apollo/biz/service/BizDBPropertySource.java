@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,16 @@ import com.ctrip.framework.foundation.Foundation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.jdbc.datasource.init.DatabasePopulatorUtils;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
+import javax.sql.DataSource;
 import java.util.Map;
 import java.util.Objects;
 
@@ -41,15 +49,29 @@ public class BizDBPropertySource extends RefreshablePropertySource {
 
   private static final Logger logger = LoggerFactory.getLogger(BizDBPropertySource.class);
 
-  @Autowired
-  private ServerConfigRepository serverConfigRepository;
+  private final ServerConfigRepository serverConfigRepository;
 
-  public BizDBPropertySource(String name, Map<String, Object> source) {
-    super(name, source);
+  private final DataSource dataSource;
+
+  private final Environment env;
+
+  @Autowired
+  public BizDBPropertySource(final ServerConfigRepository serverConfigRepository,
+      DataSource dataSource, final Environment env) {
+    super("DBConfig", Maps.newConcurrentMap());
+    this.serverConfigRepository = serverConfigRepository;
+    this.dataSource = dataSource;
+    this.env = env;
   }
 
-  public BizDBPropertySource() {
-    super("DBConfig", Maps.newConcurrentMap());
+  @PostConstruct
+  public void runSqlScript() throws Exception {
+    if (env.acceptsProfiles(Profiles.of("h2")) && !env.acceptsProfiles(Profiles.of("assembly"))) {
+      Resource resource = new ClassPathResource("jpa/configdb.init.h2.sql");
+      if (resource.exists()) {
+        DatabasePopulatorUtils.execute(new ResourceDatabasePopulator(resource), dataSource);
+      }
+    }
   }
 
   String getCurrentDataCenter() {
@@ -61,14 +83,14 @@ public class BizDBPropertySource extends RefreshablePropertySource {
     Iterable<ServerConfig> dbConfigs = serverConfigRepository.findAll();
 
     Map<String, Object> newConfigs = Maps.newHashMap();
-    //default cluster's configs
+    // default cluster's configs
     for (ServerConfig config : dbConfigs) {
       if (Objects.equals(ConfigConsts.CLUSTER_NAME_DEFAULT, config.getCluster())) {
         newConfigs.put(config.getKey(), config.getValue());
       }
     }
 
-    //data center's configs
+    // data center's configs
     String dataCenter = getCurrentDataCenter();
     for (ServerConfig config : dbConfigs) {
       if (Objects.equals(dataCenter, config.getCluster())) {
@@ -76,7 +98,7 @@ public class BizDBPropertySource extends RefreshablePropertySource {
       }
     }
 
-    //cluster's config
+    // cluster's config
     if (!Strings.isNullOrEmpty(System.getProperty(ConfigConsts.APOLLO_CLUSTER_KEY))) {
       String cluster = System.getProperty(ConfigConsts.APOLLO_CLUSTER_KEY);
       for (ServerConfig config : dbConfigs) {
@@ -86,16 +108,16 @@ public class BizDBPropertySource extends RefreshablePropertySource {
       }
     }
 
-    //put to environment
-    for (Map.Entry<String, Object> config: newConfigs.entrySet()){
+    // put to environment
+    for (Map.Entry<String, Object> config : newConfigs.entrySet()) {
       String key = config.getKey();
       Object value = config.getValue();
 
       if (this.source.get(key) == null) {
         logger.info("Load config from DB : {} = {}", key, value);
       } else if (!Objects.equals(this.source.get(key), value)) {
-        logger.info("Load config from DB : {} = {}. Old value = {}", key,
-                    value, this.source.get(key));
+        logger.info("Load config from DB : {} = {}. Old value = {}", key, value,
+            this.source.get(key));
       }
 
       this.source.put(key, value);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,16 @@
 package com.ctrip.framework.apollo.common.controller;
 
 import com.google.common.collect.Lists;
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
-import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializer;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.List;
+import org.springframework.boot.http.converter.autoconfigure.HttpMessageConverters;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
@@ -28,26 +35,50 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.GsonHttpMessageConverter;
 import org.springframework.http.converter.support.AllEncompassingFormHttpMessageConverter;
 
-import java.util.List;
-
 /**
  * Created by Jason on 5/11/16.
  */
 @Configuration
 public class HttpMessageConverterConfiguration {
   @Bean
-  public HttpMessageConverters messageConverters() {
-    GsonHttpMessageConverter gsonHttpMessageConverter = new GsonHttpMessageConverter();
-    gsonHttpMessageConverter.setGson(
-            new GsonBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").create());
-    final List<HttpMessageConverter<?>> converters = Lists.newArrayList(
-            new ByteArrayHttpMessageConverter(), new StringHttpMessageConverter(),
-            new AllEncompassingFormHttpMessageConverter(), gsonHttpMessageConverter);
-    return new HttpMessageConverters() {
-      @Override
-      public List<HttpMessageConverter<?>> getConverters() {
-        return converters;
+  public Gson gson() {
+    // Custom Gson TypeAdapter for Instant
+    JsonSerializer<Instant> instantJsonSerializer = (src, typeOfSrc,
+        context) -> src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString()); // Serialize
+                                                                                         // Instant
+                                                                                         // as
+                                                                                         // ISO-8601
+                                                                                         // string
+
+    JsonDeserializer<Instant> instantJsonDeserializer = (json, typeOfT, context) -> {
+      if (json == null || json.isJsonNull()) {
+        return null;
       }
+      return Instant.parse(json.getAsString()); // Deserialize from ISO-8601 string
     };
+    JsonSerializer<OffsetDateTime> offsetDateTimeJsonSerializer = (src, typeOfSrc,
+        context) -> src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString());
+    JsonDeserializer<OffsetDateTime> offsetDateTimeJsonDeserializer = (json, typeOfT, context) -> {
+      if (json == null || json.isJsonNull()) {
+        return null;
+      }
+      return OffsetDateTime.parse(json.getAsString());
+    };
+
+    return new GsonBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+        .registerTypeAdapter(Instant.class, instantJsonSerializer)
+        .registerTypeAdapter(Instant.class, instantJsonDeserializer)
+        .registerTypeAdapter(OffsetDateTime.class, offsetDateTimeJsonSerializer)
+        .registerTypeAdapter(OffsetDateTime.class, offsetDateTimeJsonDeserializer).create();
+  }
+
+  @Bean
+  public HttpMessageConverters messageConverters(Gson gson) {
+    GsonHttpMessageConverter gsonHttpMessageConverter = new GsonHttpMessageConverter();
+    gsonHttpMessageConverter.setGson(gson);
+    final List<HttpMessageConverter<?>> converters =
+        Lists.newArrayList(new ByteArrayHttpMessageConverter(), new StringHttpMessageConverter(),
+            new AllEncompassingFormHttpMessageConverter(), gsonHttpMessageConverter);
+    return new HttpMessageConverters(false, converters);
   }
 }

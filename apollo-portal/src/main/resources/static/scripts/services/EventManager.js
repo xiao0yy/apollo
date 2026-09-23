@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,8 +125,8 @@ appService.service('EventManager', [function () {
             PUBLISH_DENY: 'publish_deny',
             EMERGENCY_PUBLISH: 'emergency_publish',
             PRE_DELETE_NAMESPACE: 'pre_delete_namespace',
+            PRE_IMPORT_NAMESPACE: 'pre_import_namespace',
             DELETE_NAMESPACE: 'delete_namespace',
-            DELETE_NAMESPACE_FAILED: 'delete_namespace_failed',
             CHANGE_ENV_CLUSTER: "change_env_cluster",
             SYNTAX_CHECK_TEXT_FAILED: "syntax_check_text_failed"
         }

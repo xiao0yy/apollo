@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,9 @@ function ConfigBaseInfoController($rootScope, $scope, $window, $location, $trans
         $rootScope.pageContext = {
             appId: appId,
             env: urlParams.env ? urlParams.env : (scene ? scene.env : ''),
-            clusterName: urlParams.cluster ? urlParams.cluster : (scene ? scene.cluster : 'default')
+            clusterName: urlParams.cluster ? urlParams.cluster : (scene ? scene.cluster : 'default'),
+            namespaceName: urlParams.namespace,
+            item: urlParams.item,
         };
 
         //storage page context to session storage
@@ -75,6 +77,7 @@ function ConfigBaseInfoController($rootScope, $scope, $window, $location, $trans
 
             $scope.appBaseInfo = result;
             $scope.appBaseInfo.orgInfo = result.orgName + '(' + result.orgId + ')';
+            $scope.appBaseInfo.ownerInfo = result.ownerDisplayName + '(' + result.ownerName + ')';
 
             loadNavTree();
             recordVisitApp();
@@ -200,7 +203,7 @@ function ConfigBaseInfoController($rootScope, $scope, $window, $location, $trans
                 $rootScope.pageContext.env = nodes[0].env;
             }
 
-            EventManager.emit(EventManager.EventType.REFRESH_NAMESPACE);
+            EventManager.emit(EventManager.EventType.REFRESH_NAMESPACE, {firstLoad: true});
 
             nodes.forEach(function (env) {
                 if (!env.clusters || env.clusters.length == 0) {
@@ -238,6 +241,7 @@ function ConfigBaseInfoController($rootScope, $scope, $window, $location, $trans
                         parentNode.push(node.text);
                         clusterNode.tags = [$translate.instant('Common.Cluster')];
                         clusterNode.parentNode = parentNode;
+                        clusterNode.comment = cluster.comment;
                         clusterNodes.push(clusterNode);
 
                     });
@@ -284,6 +288,17 @@ function ConfigBaseInfoController($rootScope, $scope, $window, $location, $trans
                     $rootScope.showSideBar = false;
                 }
             });
+            $('#treeview .node-treeview').hover(
+                function () {
+                    // get comment by nodeid
+                    var commentValue = $('#treeview').treeview('getNode', $(this).data('nodeid')).comment;
+                    if (typeof commentValue !== 'undefined') {
+                        $(this).attr('title', commentValue);
+                    }
+                },
+                function () {
+                }
+            );
 
             var envMapClusters = {};
             navTree.forEach(function (node) {

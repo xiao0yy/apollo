@@ -1,6 +1,6 @@
 ## Contributing to apollo
 
-Apollo is released under the non-restrictive Apache 2.0 license, and follows a very standard Github development process, using Github tracker for issues and merging pull requests into master. If you want to contribute even something trivial please do not hesitate, but follow the guidelines below.
+Apollo is released under the non-restrictive Apache 2.0 license, and follows a very standard GitHub development process, using GitHub tracker for issues and merging pull requests into master. If you want to contribute even something trivial please do not hesitate, but follow the guidelines below.
 
 ### Sign the Contributor License Agreement
 
@@ -12,9 +12,7 @@ Our code style is in line with [Google Java Style Guide](https://google.github.i
 
 We provide template files [intellij-java-google-style.xml](https://github.com/ctripcorp/apollo/blob/master/apollo-buildtools/style/intellij-java-google-style.xml) for IntelliJ IDEA and [eclipse-java-google-style.xml](https://github.com/ctripcorp/apollo/blob/master/apollo-buildtools/style/eclipse-java-google-style.xml) for Eclipse. If you use other IDEs, then you may config manually by referencing the template files.
 
-* Make sure all new .java files have a simple Javadoc class comment with at least an `@author` tag identifying you, and preferably at least a paragraph on what the class is for.
-
-* Add yourself as an @author to the .java files that you modify substantially (more than cosmetic changes).
+* Make sure all new .java files have a simple Javadoc class comment on what the class is for.
 
 * Add some Javadocs and, if you change the namespace, some XSD doc elements.
 
@@ -34,4 +32,8 @@ We provide template files [intellij-java-google-style.xml](https://github.com/ct
         * `git checkout -b <some-branch-name> <remote>/master`
         * `git merge --squash <current-feature-branch>`
 
-* When writing a commit message please follow these conventions: if you are fixing an existing issue, please add Fixes #XXX at the end of the commit message (where XXX is the issue number).
+* For commits, we adhere to the conventional commits format. For more details, refer to [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
+* When crafting commit messages, please adhere to the following conventions: if your commit addresses an existing issue, append "Fixes #XXX" to the end of the commit message (where XXX is the issue number).
+
+* Before submitting a pull request, you need to run `mvn spotless:apply` locally to format the code; this is important for maintaining good coding style in the project.

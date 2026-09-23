@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 package com.ctrip.framework.apollo.portal.spi.oidc;
 
 import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
+import com.ctrip.framework.apollo.portal.spi.configuration.OidcExtendProperties;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
@@ -29,19 +32,28 @@ import org.springframework.security.oauth2.jwt.Jwt;
 /**
  * @author vdisk <vdisk@foxmail.com>
  */
-public class OidcAuthenticationSuccessEventListener implements
-    ApplicationListener<AuthenticationSuccessEvent> {
+public class OidcAuthenticationSuccessEventListener
+    implements ApplicationListener<AuthenticationSuccessEvent> {
 
-  private static final Logger log = LoggerFactory
-      .getLogger(OidcAuthenticationSuccessEventListener.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(OidcAuthenticationSuccessEventListener.class);
+
+  private static final Logger oidcLog =
+      LoggerFactory.getLogger(OidcAuthenticationSuccessEventListener.class.getName() + ".oidc");
+
+  private static final Logger jwtLog =
+      LoggerFactory.getLogger(OidcAuthenticationSuccessEventListener.class.getName() + ".jwt");
 
   private final OidcLocalUserService oidcLocalUserService;
 
+  private final OidcExtendProperties oidcExtendProperties;
+
   private final ConcurrentMap<String, String> userIdCache = new ConcurrentHashMap<>();
 
-  public OidcAuthenticationSuccessEventListener(
-      OidcLocalUserService oidcLocalUserService) {
+  public OidcAuthenticationSuccessEventListener(OidcLocalUserService oidcLocalUserService,
+      OidcExtendProperties oidcExtendProperties) {
     this.oidcLocalUserService = oidcLocalUserService;
+    this.oidcExtendProperties = oidcExtendProperties;
   }
 
   @Override
@@ -59,14 +71,33 @@ public class OidcAuthenticationSuccessEventListener implements
   }
 
   private void oidcUserLogin(OidcUser oidcUser) {
-    if (this.contains(oidcUser.getSubject())) {
+    String userId = OidcUserInfoUtil.getOidcUserId(oidcUser, this.oidcExtendProperties);
+    String userDisplayName =
+        OidcUserInfoUtil.getOidcUserDisplayName(oidcUser, this.oidcExtendProperties);
+    String email = oidcUser.getEmail();
+
+    this.logOidc(oidcUser, userId, userDisplayName, email);
+
+    UserInfo newUserInfo = new UserInfo();
+    newUserInfo.setUserId(userId);
+    newUserInfo.setName(userDisplayName);
+    newUserInfo.setEmail(email);
+    if (this.contains(userId)) {
+      this.oidcLocalUserService.updateUserInfo(newUserInfo);
       return;
     }
-    UserInfo newUserInfo = new UserInfo();
-    newUserInfo.setUserId(oidcUser.getSubject());
-    newUserInfo.setName(oidcUser.getPreferredUsername());
-    newUserInfo.setEmail(oidcUser.getEmail());
     this.oidcLocalUserService.createLocalUser(newUserInfo);
+  }
+
+  private void logOidc(OidcUser oidcUser, String userId, String userDisplayName, String email) {
+    oidcLog.debug("oidc authentication success, userId=[{}] userDisplayName=[{}] email=[{}]",
+        userId, userDisplayName, email);
+    if (oidcLog.isTraceEnabled()) {
+      Map<String, Object> claims = oidcUser.getClaims();
+      for (Entry<String, Object> entry : claims.entrySet()) {
+        oidcLog.trace("oidc authentication claims [{}={}]", entry.getKey(), entry.getValue());
+      }
+    }
   }
 
   private boolean contains(String userId) {
@@ -82,11 +113,28 @@ public class OidcAuthenticationSuccessEventListener implements
   }
 
   private void jwtLogin(Jwt jwt) {
-    if (this.contains(jwt.getSubject())) {
+    String userId = OidcUserInfoUtil.getJwtUserId(jwt, this.oidcExtendProperties);
+    String userDisplayName = OidcUserInfoUtil.getJwtUserDisplayName(jwt, this.oidcExtendProperties);
+
+    this.logJwt(jwt, userId, userDisplayName);
+
+    if (this.contains(userId)) {
       return;
     }
     UserInfo newUserInfo = new UserInfo();
-    newUserInfo.setUserId(jwt.getSubject());
+    newUserInfo.setUserId(userId);
+    newUserInfo.setName(userDisplayName);
     this.oidcLocalUserService.createLocalUser(newUserInfo);
+  }
+
+  private void logJwt(Jwt jwt, String userId, String userDisplayName) {
+    jwtLog.debug("jwt authentication success, userId=[{}] userDisplayName=[{}]", userId,
+        userDisplayName);
+    if (jwtLog.isTraceEnabled()) {
+      Map<String, Object> claims = jwt.getClaims();
+      for (Entry<String, Object> entry : claims.entrySet()) {
+        jwtLog.trace("jwt authentication claims [{}={}]", entry.getKey(), entry.getValue());
+      }
+    }
   }
 }

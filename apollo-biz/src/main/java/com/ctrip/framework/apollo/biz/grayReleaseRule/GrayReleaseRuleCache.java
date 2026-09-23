@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ public class GrayReleaseRuleCache implements Comparable<GrayReleaseRuleCache> {
   private int branchStatus;
   private Set<GrayReleaseRuleItemDTO> ruleItems;
 
-  public GrayReleaseRuleCache(long ruleId, String branchName, String namespaceName, long
-      releaseId, int branchStatus, long loadVersion, Set<GrayReleaseRuleItemDTO> ruleItems) {
+  public GrayReleaseRuleCache(long ruleId, String branchName, String namespaceName, long releaseId,
+      int branchStatus, long loadVersion, Set<GrayReleaseRuleItemDTO> ruleItems) {
     this.ruleId = ruleId;
     this.branchName = branchName;
     this.namespaceName = namespaceName;
@@ -75,9 +75,9 @@ public class GrayReleaseRuleCache implements Comparable<GrayReleaseRuleCache> {
     return namespaceName;
   }
 
-  public boolean matches(String clientAppId, String clientIp) {
+  public boolean matches(String clientAppId, String clientIp, String clientLabel) {
     for (GrayReleaseRuleItemDTO ruleItem : ruleItems) {
-      if (ruleItem.matches(clientAppId, clientIp)) {
+      if (ruleItem.matches(clientAppId, clientIp, clientLabel)) {
         return true;
       }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,39 @@ package com.ctrip.framework.apollo.portal.spi.springsecurity;
 
 import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
 import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
-
+import com.ctrip.framework.apollo.portal.spi.UserService;
+import java.util.function.Supplier;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.security.Principal;
 
 public class SpringSecurityUserInfoHolder implements UserInfoHolder {
 
+  private final Supplier<UserService> userServiceSupplier;
+
+  public SpringSecurityUserInfoHolder(UserService userService) {
+    this(() -> userService);
+  }
+
+  public SpringSecurityUserInfoHolder(ObjectProvider<UserService> userServiceProvider) {
+    this(userServiceProvider::getObject);
+  }
+
+  private SpringSecurityUserInfoHolder(Supplier<UserService> userServiceSupplier) {
+    this.userServiceSupplier = userServiceSupplier;
+  }
+
   @Override
   public UserInfo getUser() {
+    String userId = this.getCurrentUsername();
+    UserInfo userInfoFound = this.userServiceSupplier.get().findByUserId(userId);
+    if (userInfoFound != null) {
+      return userInfoFound;
+    }
     UserInfo userInfo = new UserInfo();
-    userInfo.setUserId(getCurrentUsername());
+    userInfo.setUserId(userId);
     return userInfo;
   }
 

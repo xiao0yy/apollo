@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,12 @@
  */
 package com.ctrip.framework.apollo.portal.controller;
 
+import static com.ctrip.framework.apollo.common.constants.AccessKeyMode.FILTER;
+
+import com.ctrip.framework.apollo.audit.annotation.ApolloAuditLog;
+import com.ctrip.framework.apollo.audit.annotation.OpType;
 import com.ctrip.framework.apollo.common.dto.AccessKeyDTO;
+import com.ctrip.framework.apollo.common.utils.UniqueKeyGenerator;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.portal.service.AccessKeyService;
 import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
@@ -24,64 +29,63 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * @author nisiyong
  */
+/**
+ * @deprecated Portal UI uses /openapi/v1 endpoints. This legacy WebAPI controller is kept for
+ *     compatibility.
+ */
+@Deprecated
 @RestController
 public class AccessKeyController {
 
   private final UserInfoHolder userInfoHolder;
   private final AccessKeyService accessKeyService;
 
-  public AccessKeyController(
-      UserInfoHolder userInfoHolder,
-      AccessKeyService accessKeyService) {
+  public AccessKeyController(UserInfoHolder userInfoHolder, AccessKeyService accessKeyService) {
     this.userInfoHolder = userInfoHolder;
     this.accessKeyService = accessKeyService;
   }
 
-  @PreAuthorize(value = "@permissionValidator.isAppAdmin(#appId)")
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
   @PostMapping(value = "/apps/{appId}/envs/{env}/accesskeys")
+  @ApolloAuditLog(type = OpType.CREATE, name = "AccessKey.create")
   public AccessKeyDTO save(@PathVariable String appId, @PathVariable String env,
       @RequestBody AccessKeyDTO accessKeyDTO) {
-    String secret = UUID.randomUUID().toString().replaceAll("-", "");
     accessKeyDTO.setAppId(appId);
-    accessKeyDTO.setSecret(secret);
+    accessKeyDTO.setSecret(UniqueKeyGenerator.generateId());
     return accessKeyService.createAccessKey(Env.valueOf(env), accessKeyDTO);
   }
 
-  @PreAuthorize(value = "@permissionValidator.isAppAdmin(#appId)")
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
   @GetMapping(value = "/apps/{appId}/envs/{env}/accesskeys")
-  public List<AccessKeyDTO> findByAppId(@PathVariable String appId,
-      @PathVariable String env) {
+  public List<AccessKeyDTO> findByAppId(@PathVariable String appId, @PathVariable String env) {
     return accessKeyService.findByAppId(Env.valueOf(env), appId);
   }
 
-  @PreAuthorize(value = "@permissionValidator.isAppAdmin(#appId)")
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
   @DeleteMapping(value = "/apps/{appId}/envs/{env}/accesskeys/{id}")
-  public void delete(@PathVariable String appId,
-      @PathVariable String env,
-      @PathVariable long id) {
+  @ApolloAuditLog(type = OpType.DELETE, name = "AccessKey.delete")
+  public void delete(@PathVariable String appId, @PathVariable String env, @PathVariable long id) {
     String operator = userInfoHolder.getUser().getUserId();
     accessKeyService.deleteAccessKey(Env.valueOf(env), appId, id, operator);
   }
 
-  @PreAuthorize(value = "@permissionValidator.isAppAdmin(#appId)")
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
   @PutMapping(value = "/apps/{appId}/envs/{env}/accesskeys/{id}/enable")
-  public void enable(@PathVariable String appId,
-      @PathVariable String env,
-      @PathVariable long id) {
+  @ApolloAuditLog(type = OpType.UPDATE, name = "AccessKey.enable")
+  public void enable(@PathVariable String appId, @PathVariable String env, @PathVariable long id,
+      @RequestParam(required = false, defaultValue = "" + FILTER) int mode) {
     String operator = userInfoHolder.getUser().getUserId();
-    accessKeyService.enable(Env.valueOf(env), appId, id, operator);
+    accessKeyService.enable(Env.valueOf(env), appId, id, mode, operator);
   }
 
-  @PreAuthorize(value = "@permissionValidator.isAppAdmin(#appId)")
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
   @PutMapping(value = "/apps/{appId}/envs/{env}/accesskeys/{id}/disable")
-  public void disable(@PathVariable String appId,
-      @PathVariable String env,
-      @PathVariable long id) {
+  @ApolloAuditLog(type = OpType.UPDATE, name = "AccessKey.disable")
+  public void disable(@PathVariable String appId, @PathVariable String env, @PathVariable long id) {
     String operator = userInfoHolder.getUser().getUserId();
     accessKeyService.disable(Env.valueOf(env), appId, id, operator);
   }

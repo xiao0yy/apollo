@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,68 +14,111 @@
  * limitations under the License.
  *
  */
-appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resource, $q, AppUtil) {
-    var app_resource = $resource(AppUtil.prefixPath() + '/apps/:appId', {}, {
+appService.service('AppService', ['$resource', '$q', 'AppUtil', 'UserService', function ($resource, $q, AppUtil, UserService) {
+    var app_resource = $resource('', {}, {
         find_apps: {
             method: 'GET',
             isArray: true,
-            url: AppUtil.prefixPath() + '/apps'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps'
         },
-        find_app_by_owner: {
+        find_app_by_self: {
             method: 'GET',
             isArray: true,
-            url: AppUtil.prefixPath() + '/apps/by-owner'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/by-self'
         },
         load_navtree: {
             method: 'GET',
-            isArray: false,
-            url: AppUtil.prefixPath() + '/apps/:appId/navtree'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/env-cluster-info',
+            isArray: true
         },
         load_app: {
             method: 'GET',
-            isArray: false
+            isArray: false,
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId'
         },
         create_app: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/apps'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps'
         },
         update_app: {
             method: 'PUT',
-            url: AppUtil.prefixPath() + '/apps/:appId'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId'
         },
         create_app_remote: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/apps/envs/:env'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/envs/:env'
         },
         find_miss_envs: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/apps/:appId/miss_envs'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/miss-envs',
+            isArray: true
         },
         create_missing_namespaces: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/apps/:appId/envs/:env/clusters/:clusterName/missing-namespaces'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/envs/:env/clusters/:clusterName/missing-namespaces'
         },
         find_missing_namespaces: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/apps/:appId/envs/:env/clusters/:clusterName/missing-namespaces'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/envs/:env/clusters/:clusterName/missing-namespaces',
+            isArray: true
         },
         delete_app: {
             method: 'DELETE',
-            isArray: false
+            isArray: false,
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId'
         },
         allow_app_master_assign_role: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/apps/:appId/system/master/:userId'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/roles/master'
         },
         delete_app_master_assign_role: {
             method: 'DELETE',
-            url: AppUtil.prefixPath() + '/apps/:appId/system/master/:userId'
+            url: AppUtil.prefixPath() + '/openapi/v1/apps/:appId/roles/master'
         },
         has_create_application_role: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/system/role/createApplication/:userId'
+            url: AppUtil.prefixPath() + '/openapi/v1/system/roles/create-application'
         }
     });
+    var current_user_promise;
+
+    function loadCurrentUserId() {
+        if (!current_user_promise) {
+            current_user_promise = UserService.load_user().then(function (user) {
+                return user.userId;
+            }, function (result) {
+                current_user_promise = null;
+                return $q.reject(result);
+            });
+        }
+        return current_user_promise;
+    }
+
+    function normalizeOpenApiStatusArray(result, bodyMapper) {
+        var response = {
+            entities: []
+        };
+        var items = angular.isArray(result) ? result : [];
+        items.forEach(function (item) {
+            var code = item.code || 200;
+            var entity = {
+                code: code,
+                message: item.message
+            };
+            if (code == 200) {
+                entity.body = bodyMapper(item);
+            }
+            response.entities.push(entity);
+        });
+        return response;
+    }
+
+    function normalizeOpenApiStringArray(result) {
+        return normalizeOpenApiStatusArray(result, function (item) {
+            return item;
+        });
+    }
+
     return {
         find_apps: function (appIds) {
             if (!appIds) {
@@ -89,10 +132,9 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
             });
             return d.promise;
         },
-        find_app_by_owner: function (owner, page, size) {
+        find_app_by_self: function (page, size) {
             var d = $q.defer();
-            app_resource.find_app_by_owner({
-                                               owner: owner,
+            app_resource.find_app_by_self({
                                                page: page,
                                                size: size
                                            }, function (result) {
@@ -107,7 +149,9 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
             app_resource.load_navtree({
                                           appId: appId
                                       }, function (result) {
-                d.resolve(result);
+                d.resolve(normalizeOpenApiStatusArray(result, function (item) {
+                    return item;
+                }));
             }, function (result) {
                 d.reject(result);
             });
@@ -115,8 +159,14 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
         },
         create: function (app) {
             var d = $q.defer();
-            app_resource.create_app({}, app, function (result) {
-                d.resolve(result);
+            var appPayload = angular.copy(app);
+            delete appPayload.admins;
+            app_resource.create_app({}, {
+                app: appPayload,
+                admins: app.admins,
+                assignAppRoleToSelf: false
+            }, function (result) {
+                d.resolve(result && result.appId ? result : app);
             }, function (result) {
                 d.reject(result);
             });
@@ -158,7 +208,9 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
             app_resource.find_miss_envs({
                                             appId: appId
                                         }, function (result) {
-                d.resolve(result);
+                d.resolve(normalizeOpenApiStatusArray(result, function (item) {
+                    return item.message;
+                }));
             }, function (result) {
                 d.reject(result);
             });
@@ -184,7 +236,7 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
                                             env: env,
                                             clusterName: clusterName
                                         }, function (result) {
-                d.resolve(result);
+                d.resolve(normalizeOpenApiStringArray(result));
             }, function (result) {
                 d.reject(result);
             });
@@ -203,11 +255,16 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
         },
         allow_app_master_assign_role: function (appId, userId) {
             var d = $q.defer();
-            app_resource.allow_app_master_assign_role({
-                appId: appId,
-                userId: userId
-            }, null, function (result) {
-                d.resolve(result);
+            loadCurrentUserId().then(function (operator) {
+                app_resource.allow_app_master_assign_role({
+                    appId: appId,
+                    userId: userId,
+                    operator: operator
+                }, null, function (result) {
+                    d.resolve(result);
+                }, function (result) {
+                    d.reject(result);
+                });
             }, function (result) {
                 d.reject(result);
             });
@@ -215,11 +272,16 @@ appService.service('AppService', ['$resource', '$q', 'AppUtil', function ($resou
         },
         delete_app_master_assign_role: function (appId, userId) {
             var d = $q.defer();
-            app_resource.delete_app_master_assign_role({
-                appId: appId,
-                userId: userId
-            }, function (result) {
-                d.resolve(result);
+            loadCurrentUserId().then(function (operator) {
+                app_resource.delete_app_master_assign_role({
+                    appId: appId,
+                    userId: userId,
+                    operator: operator
+                }, function (result) {
+                    d.resolve(result);
+                }, function (result) {
+                    d.reject(result);
+                });
             }, function (result) {
                 d.reject(result);
             });

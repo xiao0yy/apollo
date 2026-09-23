@@ -1,6 +1,6 @@
 <?xml version="1.0"  encoding="UTF-8"?>
 <!--
-  ~ Copyright 2021 Apollo Authors
+  ~ Copyright 2024 Apollo Authors
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -34,6 +34,10 @@
 		<dependency>
 			<groupId>com.ctrip.framework.apollo</groupId>
 			<artifactId>apollo-biz</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.ctrip.framework.apollo</groupId>
+			<artifactId>apollo-audit-spring-boot-starter</artifactId>
 		</dependency>
 		<!-- end of apollo -->
 		<dependency>
@@ -80,29 +84,20 @@
 			<artifactId>jersey-apache-client4</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Jakarta EE APIs -->
 		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<!-- JDK 1.8+ -->
-		<dependency>
-			<groupId>javax.xml.bind</groupId>
-			<artifactId>jaxb-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.sun.xml.bind</groupId>
-			<artifactId>jaxb-impl</artifactId>
+			<groupId>jakarta.xml.bind</groupId>
+			<artifactId>jakarta.xml.bind-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.glassfish.jaxb</groupId>
 			<artifactId>jaxb-runtime</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>javax.activation</groupId>
-			<artifactId>activation</artifactId>
+			<groupId>jakarta.activation</groupId>
+			<artifactId>jakarta.activation-api</artifactId>
 		</dependency>
-		<!-- end of JDK 1.8+ -->
+		<!-- end of Jakarta EE APIs -->
 		<!-- JDK 11+ -->
 		<dependency>
 			<groupId>org.javassist</groupId>
@@ -166,12 +161,8 @@
 			<id>nacos-discovery</id>
 			<dependencies>
 				<dependency>
-					<groupId>com.alibaba.boot</groupId>
-					<artifactId>nacos-discovery-spring-boot-starter</artifactId>
-				</dependency>
-				<dependency>
-					<groupId>com.alibaba</groupId>
-					<artifactId>fastjson</artifactId>
+					<groupId>com.alibaba.cloud</groupId>
+					<artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
 				</dependency>
 			</dependencies>
 		</profile>

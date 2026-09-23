@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Properties;
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.annotation.Resource;
-import javax.mail.Message;
-import javax.mail.Session;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
+import jakarta.activation.DataHandler;
+import jakarta.activation.DataSource;
+import jakarta.annotation.Resource;
+import jakarta.mail.Message;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +56,8 @@ public class DefaultEmailService implements EmailService {
 
       Message msg = new MimeMessage(session);
       msg.setFrom(new InternetAddress(email.getSenderEmailAddress()));
-      msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email.getRecipientsString(), false));
+      msg.setRecipients(Message.RecipientType.TO,
+          InternetAddress.parse(email.getRecipientsString(), false));
       msg.setSubject(email.getSubject());
       msg.setDataHandler(new DataHandler(new HTMLDataSource(email.getBody())));
 
@@ -85,7 +86,7 @@ public class DefaultEmailService implements EmailService {
 
   static class HTMLDataSource implements DataSource {
 
-    private String html;
+    private final String html;
 
     HTMLDataSource(String htmlString) {
       html = htmlString;

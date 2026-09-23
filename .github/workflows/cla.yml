@@ -1,5 +1,5 @@
 #
-# Copyright 2021 Apollo Authors
+# Copyright 2024 Apollo Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,10 +34,10 @@ jobs:
           PERSONAL_ACCESS_TOKEN : ${{ secrets.PERSONAL_ACCESS_TOKEN_FOR_CLA_ASSISTANT }}
         with:
           path-to-signatures: 'signatures/version1/cla.json'
-          path-to-document: 'https://github.com/ctripcorp/apollo-community/blob/master/CLA.md' # e.g. a CLA or a DCO document
+          path-to-document: 'https://github.com/apolloconfig/apollo-community/blob/master/CLA.md' # e.g. a CLA or a DCO document
           # branch should not be protected
           branch: 'master'
-          allowlist: dependabot,bot*
+          allowlist: dependabot,bot*,github-actions
           remote-repository-name: apollo-community
 
          #below are the optional inputs - If the optional inputs are not given, then default values will be taken

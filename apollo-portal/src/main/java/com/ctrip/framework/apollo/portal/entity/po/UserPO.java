@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,31 +18,33 @@ package com.ctrip.framework.apollo.portal.entity.po;
 
 import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 /**
  * @author lepdou 2017-04-08
  */
 @Entity
-@Table(name = "Users")
+@Table(name = "`Users`")
 public class UserPO {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "Id")
+  @Column(name = "`Id`")
   private long id;
-  @Column(name = "Username", nullable = false)
+  @Column(name = "`Username`", nullable = false)
   private String username;
-  @Column(name = "Password", nullable = false)
+  @Column(name = "`UserDisplayName`", nullable = false)
+  private String userDisplayName;
+  @Column(name = "`Password`", nullable = false)
   private String password;
-  @Column(name = "Email", nullable = false)
+  @Column(name = "`Email`", nullable = false)
   private String email;
-  @Column(name = "Enabled", nullable = false)
+  @Column(name = "`Enabled`", nullable = false)
   private int enabled;
 
   public long getId() {
@@ -59,6 +61,14 @@ public class UserPO {
 
   public void setUsername(String username) {
     this.username = username;
+  }
+
+  public String getUserDisplayName() {
+    return userDisplayName;
+  }
+
+  public void setUserDisplayName(String userDisplayName) {
+    this.userDisplayName = userDisplayName;
   }
 
   public String getEmail() {
@@ -87,9 +97,10 @@ public class UserPO {
 
   public UserInfo toUserInfo() {
     UserInfo userInfo = new UserInfo();
-    userInfo.setName(this.getUsername());
     userInfo.setUserId(this.getUsername());
+    userInfo.setName(this.getUserDisplayName());
     userInfo.setEmail(this.getEmail());
+    userInfo.setEnabled(this.getEnabled());
     return userInfo;
   }
 }

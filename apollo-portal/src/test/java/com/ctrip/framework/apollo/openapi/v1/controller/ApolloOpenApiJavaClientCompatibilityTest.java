@@ -1,0 +1,726 @@
+/*
+ * Copyright 2025 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+package com.ctrip.framework.apollo.openapi.v1.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.ctrip.framework.apollo.SkipAuthorizationConfiguration;
+import com.ctrip.framework.apollo.common.dto.ReleaseDTO;
+import com.ctrip.framework.apollo.common.dto.GrayReleaseRuleDTO;
+import com.ctrip.framework.apollo.common.dto.GrayReleaseRuleItemDTO;
+import com.ctrip.framework.apollo.common.dto.InstanceDTO;
+import com.ctrip.framework.apollo.common.dto.InstanceConfigDTO;
+import com.ctrip.framework.apollo.common.dto.ItemDTO;
+import com.ctrip.framework.apollo.common.dto.PageDTO;
+import com.ctrip.framework.apollo.common.controller.HttpMessageConverterConfiguration;
+import com.ctrip.framework.apollo.common.exception.NotFoundException;
+import com.ctrip.framework.apollo.core.enums.ConfigFileFormat;
+import com.ctrip.framework.apollo.openapi.client.ApolloOpenApiClient;
+import com.ctrip.framework.apollo.openapi.dto.NamespaceReleaseDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenAppDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenAppNamespaceDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenClusterDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenCreateAppDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenEnvClusterDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenItemDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenNamespaceDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenNamespaceLockDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenOrganizationDto;
+import com.ctrip.framework.apollo.openapi.dto.OpenPageDTO;
+import com.ctrip.framework.apollo.openapi.dto.OpenReleaseDTO;
+import com.ctrip.framework.apollo.openapi.server.service.AppOpenApiService;
+import com.ctrip.framework.apollo.openapi.server.service.ClusterOpenApiService;
+import com.ctrip.framework.apollo.openapi.server.service.ItemOpenApiService;
+import com.ctrip.framework.apollo.openapi.server.service.NamespaceOpenApiService;
+import com.ctrip.framework.apollo.openapi.server.service.OrganizationOpenApiService;
+import com.ctrip.framework.apollo.openapi.service.ConsumerService;
+import com.ctrip.framework.apollo.openapi.util.OpenApiModelConverters;
+import com.ctrip.framework.apollo.portal.PortalApplication;
+import com.ctrip.framework.apollo.portal.component.AdminServiceAddressLocator;
+import com.ctrip.framework.apollo.portal.component.PortalSettings;
+import com.ctrip.framework.apollo.portal.component.UnifiedPermissionValidator;
+import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
+import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
+import com.ctrip.framework.apollo.portal.entity.model.NamespaceReleaseModel;
+import com.ctrip.framework.apollo.portal.environment.Env;
+import com.ctrip.framework.apollo.portal.service.InstanceService;
+import com.ctrip.framework.apollo.portal.service.NamespaceBranchService;
+import com.ctrip.framework.apollo.portal.service.ReleaseService;
+import com.ctrip.framework.apollo.portal.service.RolePermissionService;
+import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
+import com.ctrip.framework.apollo.portal.spi.UserService;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.util.Arrays;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.client.RestTemplate;
+
+/**
+ * Compatibility tests for the published apollo-openapi Java client against Portal OpenAPI routes.
+ */
+@SpringBootTest(classes = {PortalApplication.class, SkipAuthorizationConfiguration.class},
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("skipAuthorization")
+@TestPropertySource(properties = {"api.pool.max.total=100", "api.pool.max.per.route=100",
+    "api.connectionTimeToLive=30000", "api.connectTimeout=5000", "api.readTimeout=5000"})
+public class ApolloOpenApiJavaClientCompatibilityTest {
+
+  private static final String APP_ID = "legacy-app";
+  private static final String ENV = "DEV";
+  private static final String CLUSTER = "default";
+  private static final String NAMESPACE = "application";
+  private static final String OPERATOR = "legacy-operator";
+  private static final String AUDIT_CREATED_BY_DISPLAY_NAME = "Legacy Creator";
+  private static final String AUDIT_LAST_MODIFIED_BY_DISPLAY_NAME = "Legacy Operator";
+
+  @Value("${local.server.port}")
+  private int port;
+
+  @MockitoBean(name = "unifiedPermissionValidator")
+  private UnifiedPermissionValidator unifiedPermissionValidator;
+
+  @MockitoBean
+  private AppOpenApiService appOpenApiService;
+
+  @MockitoBean
+  private ClusterOpenApiService clusterOpenApiService;
+
+  @MockitoBean
+  private ItemOpenApiService itemOpenApiService;
+
+  @MockitoBean
+  private OrganizationOpenApiService organizationOpenApiService;
+
+  @MockitoBean
+  private PortalSettings portalSettings;
+
+  @MockitoBean
+  private AdminServiceAddressLocator adminServiceAddressLocator;
+
+  @MockitoBean
+  private NamespaceOpenApiService namespaceOpenApiService;
+
+  @MockitoBean
+  private com.ctrip.framework.apollo.openapi.api.NamespaceOpenApiService legacyNamespaceOpenApiService;
+
+  @MockitoBean
+  private PortalConfig portalConfig;
+
+  @MockitoBean
+  private com.ctrip.framework.apollo.openapi.api.ReleaseOpenApiService releaseOpenApiService;
+
+  @MockitoBean
+  private com.ctrip.framework.apollo.openapi.api.InstanceOpenApiService instanceOpenApiService;
+
+  @MockitoBean
+  private UserService userService;
+
+  @MockitoBean
+  private UserInfoHolder userInfoHolder;
+
+  @MockitoBean
+  private ConsumerService consumerService;
+
+  @MockitoBean
+  private RolePermissionService rolePermissionService;
+
+  @MockitoBean
+  private ReleaseService releaseService;
+
+  @MockitoBean
+  private NamespaceBranchService namespaceBranchService;
+
+  @MockitoBean
+  private InstanceService instanceService;
+
+  @MockitoBean
+  private ApplicationEventPublisher applicationEventPublisher;
+
+  private ApolloOpenApiClient client;
+  private RestTemplate rawRestTemplate;
+
+  @BeforeEach
+  public void setUp() {
+    client = ApolloOpenApiClient.newBuilder().withPortalUrl("http://localhost:" + port)
+        .withToken("legacy-token").build();
+    rawRestTemplate = new RestTemplate();
+
+    UserInfo operator = new UserInfo();
+    operator.setUserId(OPERATOR);
+    when(userService.findByUserId(anyString())).thenReturn(operator);
+    when(userInfoHolder.getUser()).thenReturn(operator);
+
+    when(unifiedPermissionValidator.hasCreateApplicationPermission()).thenReturn(true);
+    when(unifiedPermissionValidator.hasCreateClusterPermission(anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.hasCreateNamespacePermission(anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.hasModifyNamespacePermission(anyString(), anyString(),
+        anyString(), anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.hasReleaseNamespacePermission(anyString(), anyString(),
+        anyString(), anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.isAppAdmin(anyString())).thenReturn(true);
+    when(unifiedPermissionValidator.shouldHideConfigToCurrentUser(anyString(), anyString(),
+        anyString(), anyString())).thenReturn(false);
+    when(portalConfig.isEmergencyPublishAllowed(any())).thenReturn(true);
+  }
+
+  @Test
+  public void legacyAppAndOrganizationMethodsShouldRemainCompatible() {
+    OpenCreateAppDTO createAppRequest = new OpenCreateAppDTO();
+    OpenAppDTO createApp = legacyApp("created-app");
+    createApp.setDataChangeCreatedBy(OPERATOR);
+    createAppRequest.setApp(createApp);
+    createAppRequest.setAssignAppRoleToSelf(false);
+    client.createApp(createAppRequest);
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenCreateAppDTO> createAppCaptor =
+        ArgumentCaptor.forClass(com.ctrip.framework.apollo.openapi.model.OpenCreateAppDTO.class);
+    verify(appOpenApiService).createApp(createAppCaptor.capture(), eq(OPERATOR));
+    assertThat(createAppCaptor.getValue().getApp().getAppId()).isEqualTo("created-app");
+    assertThat(createAppCaptor.getValue().getApp().getDataChangeCreatedBy()).isEqualTo(OPERATOR);
+    assertThat(createAppCaptor.getValue().getAssignAppRoleToSelf()).isFalse();
+
+    when(appOpenApiService.getAllApps())
+        .thenReturn(Collections.singletonList(generatedApp(APP_ID)));
+    List<OpenAppDTO> allApps = client.getAllApps();
+    assertThat(allApps).extracting(OpenAppDTO::getAppId).containsExactly(APP_ID);
+    verify(appOpenApiService).getAllApps();
+
+    when(appOpenApiService.getAppsInfo(anyList()))
+        .thenReturn(Collections.singletonList(generatedApp(APP_ID)));
+    List<OpenAppDTO> appsByIds = client.getAppsByIds(Arrays.asList(APP_ID));
+    assertThat(appsByIds).extracting(OpenAppDTO::getName).containsExactly("Legacy App");
+    verify(appOpenApiService).getAppsInfo(Collections.singletonList(APP_ID));
+
+    when(consumerService.findAppIdsAuthorizedByConsumerId(0L))
+        .thenReturn(new LinkedHashSet<>(Collections.singletonList(APP_ID)));
+    List<OpenAppDTO> authorizedApps = client.getAuthorizedApps();
+    assertThat(authorizedApps).extracting(OpenAppDTO::getAppId).containsExactly(APP_ID);
+
+    com.ctrip.framework.apollo.openapi.model.OpenEnvClusterDTO envCluster =
+        new com.ctrip.framework.apollo.openapi.model.OpenEnvClusterDTO();
+    envCluster.setEnv(ENV);
+    envCluster.setClusters(Collections.singletonList(CLUSTER));
+    when(appOpenApiService.getEnvClusters(APP_ID))
+        .thenReturn(Collections.singletonList(envCluster));
+    List<OpenEnvClusterDTO> envClusters = client.getEnvClusterInfo(APP_ID);
+    assertThat(envClusters).hasSize(1);
+    assertThat(envClusters.get(0).getEnv()).isEqualTo(ENV);
+    assertThat(envClusters.get(0).getClusters()).containsExactly(CLUSTER);
+    verify(appOpenApiService).getEnvClusters(APP_ID);
+
+    com.ctrip.framework.apollo.openapi.model.OpenOrganizationDto organization =
+        new com.ctrip.framework.apollo.openapi.model.OpenOrganizationDto();
+    organization.setOrgId("org-1");
+    organization.setOrgName("Organization One");
+    when(organizationOpenApiService.getOrganizations())
+        .thenReturn(Collections.singletonList(organization));
+    List<OpenOrganizationDto> organizations = client.getOrganizations();
+    assertThat(organizations).extracting(OpenOrganizationDto::getOrgId).containsExactly("org-1");
+    verify(organizationOpenApiService).getOrganizations();
+  }
+
+  @Test
+  public void legacyClusterAndNamespaceMethodsShouldRemainCompatible() {
+    when(clusterOpenApiService.getCluster(APP_ID, ENV, CLUSTER))
+        .thenReturn(generatedCluster(APP_ID, CLUSTER));
+    OpenClusterDTO loadedCluster = client.getCluster(APP_ID, ENV, null);
+    assertThat(loadedCluster.getName()).isEqualTo(CLUSTER);
+    verify(clusterOpenApiService).getCluster(APP_ID, ENV, CLUSTER);
+
+    OpenClusterDTO createClusterRequest = new OpenClusterDTO();
+    createClusterRequest.setAppId(APP_ID);
+    createClusterRequest.setName("legacy-cluster");
+    createClusterRequest.setDataChangeCreatedBy(OPERATOR);
+    when(clusterOpenApiService.createCluster(eq(ENV),
+        any(com.ctrip.framework.apollo.openapi.model.OpenClusterDTO.class), eq(OPERATOR)))
+        .thenReturn(generatedCluster(APP_ID, "legacy-cluster"));
+
+    OpenClusterDTO createdCluster = client.createCluster(ENV, createClusterRequest);
+    assertThat(createdCluster.getName()).isEqualTo("legacy-cluster");
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenClusterDTO> clusterCaptor =
+        ArgumentCaptor.forClass(com.ctrip.framework.apollo.openapi.model.OpenClusterDTO.class);
+    verify(clusterOpenApiService).createCluster(eq(ENV), clusterCaptor.capture(), eq(OPERATOR));
+    assertThat(clusterCaptor.getValue().getDataChangeCreatedBy()).isEqualTo(OPERATOR);
+
+    com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO namespace = generatedNamespace();
+    when(namespaceOpenApiService.findNamespaces(APP_ID, ENV, CLUSTER, false, false))
+        .thenReturn(Collections.singletonList(namespace));
+    List<OpenNamespaceDTO> namespaces = client.getNamespaces(APP_ID, ENV, null, false);
+    assertThat(namespaces).extracting(OpenNamespaceDTO::getNamespaceName)
+        .containsExactly(NAMESPACE);
+    verify(namespaceOpenApiService).findNamespaces(APP_ID, ENV, CLUSTER, false, false);
+
+    when(namespaceOpenApiService.findNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, true, false))
+        .thenReturn(namespace);
+    OpenNamespaceDTO loadedNamespace = client.getNamespace(APP_ID, ENV, null, null, true);
+    assertThat(loadedNamespace.getNamespaceName()).isEqualTo(NAMESPACE);
+    verify(namespaceOpenApiService).findNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, true, false);
+
+    com.ctrip.framework.apollo.openapi.model.OpenNamespaceLockDTO lock =
+        new com.ctrip.framework.apollo.openapi.model.OpenNamespaceLockDTO();
+    lock.setNamespaceName(NAMESPACE);
+    lock.setLockedBy(OPERATOR);
+    when(namespaceOpenApiService.getNamespaceLock(APP_ID, ENV, CLUSTER, NAMESPACE))
+        .thenReturn(lock);
+    OpenNamespaceLockDTO loadedLock = client.getNamespaceLock(APP_ID, ENV, null, null);
+    assertThat(loadedLock.getLockedBy()).isEqualTo(OPERATOR);
+    verify(namespaceOpenApiService).getNamespaceLock(APP_ID, ENV, CLUSTER, NAMESPACE);
+
+    OpenAppNamespaceDTO appNamespace = new OpenAppNamespaceDTO();
+    appNamespace.setAppId(APP_ID);
+    appNamespace.setName("legacyNamespace");
+    appNamespace.setFormat(ConfigFileFormat.Properties.getValue());
+    appNamespace.setDataChangeCreatedBy(OPERATOR);
+    when(namespaceOpenApiService.createAppNamespace(eq(APP_ID),
+        any(com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO.class), eq(OPERATOR)))
+        .thenReturn(generatedAppNamespace("legacyNamespace"));
+    OpenAppNamespaceDTO createdAppNamespace = client.createAppNamespace(appNamespace);
+    assertThat(createdAppNamespace.getName()).isEqualTo("legacyNamespace");
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO>
+        appNamespaceCaptor =
+            ArgumentCaptor.forClass(
+                com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO.class);
+    verify(namespaceOpenApiService).createAppNamespace(eq(APP_ID), appNamespaceCaptor.capture(),
+        eq(OPERATOR));
+    assertThat(appNamespaceCaptor.getValue().getAppId()).isEqualTo(APP_ID);
+    assertThat(appNamespaceCaptor.getValue().getName()).isEqualTo("legacyNamespace");
+    assertThat(appNamespaceCaptor.getValue().getDataChangeCreatedBy()).isEqualTo(OPERATOR);
+  }
+
+  @Test
+  public void legacyItemMethodsShouldPreserveOperatorsEncodedKeysAndPaging() {
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "timeout"))
+        .thenReturn(generatedItem("timeout", "100"));
+    OpenItemDTO loadedItem = client.getItem(APP_ID, ENV, null, null, "timeout");
+    assertThat(loadedItem.getValue()).isEqualTo("100");
+    verify(itemOpenApiService).getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "timeout");
+
+    String encodedKey = "feature flag/with space";
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, encodedKey))
+        .thenReturn(generatedItem(encodedKey, "enabled"));
+    OpenItemDTO loadedEncodedItem = client.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, encodedKey);
+    assertThat(loadedEncodedItem.getKey()).isEqualTo(encodedKey);
+    verify(itemOpenApiService).getItem(APP_ID, ENV, CLUSTER, NAMESPACE, encodedKey);
+
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "missing"))
+        .thenThrow(NotFoundException.itemNotFound("missing"));
+    assertThat(client.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "missing")).isNull();
+
+    OpenItemDTO createItem = legacyItem("create-key", "create-value");
+    createItem.setDataChangeCreatedBy(OPERATOR);
+    when(itemOpenApiService.createItem(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        any(com.ctrip.framework.apollo.openapi.model.OpenItemDTO.class), eq(OPERATOR)))
+        .thenReturn(generatedItem("create-key", "create-value"));
+    OpenItemDTO createdItem = client.createItem(APP_ID, ENV, null, null, createItem);
+    assertThat(createdItem.getKey()).isEqualTo("create-key");
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenItemDTO> createItemCaptor =
+        ArgumentCaptor.forClass(com.ctrip.framework.apollo.openapi.model.OpenItemDTO.class);
+    verify(itemOpenApiService).createItem(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        createItemCaptor.capture(), eq(OPERATOR));
+    assertThat(createItemCaptor.getValue().getDataChangeCreatedBy()).isEqualTo(OPERATOR);
+    assertThat(createItemCaptor.getValue().getDataChangeLastModifiedBy()).isEqualTo(OPERATOR);
+
+    OpenItemDTO updateItem = legacyItem("update-key", "update-value");
+    updateItem.setDataChangeLastModifiedBy(OPERATOR);
+    client.updateItem(APP_ID, ENV, null, null, updateItem);
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenItemDTO> updateItemCaptor =
+        ArgumentCaptor.forClass(com.ctrip.framework.apollo.openapi.model.OpenItemDTO.class);
+    verify(itemOpenApiService).updateItem(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        updateItemCaptor.capture(), eq(OPERATOR));
+    assertThat(updateItemCaptor.getValue().getKey()).isEqualTo("update-key");
+
+    OpenItemDTO createOrUpdateItem = legacyItem("upsert-key", "upsert-value");
+    createOrUpdateItem.setDataChangeCreatedBy(OPERATOR);
+    client.createOrUpdateItem(APP_ID, ENV, null, null, createOrUpdateItem);
+    ArgumentCaptor<com.ctrip.framework.apollo.openapi.model.OpenItemDTO> upsertItemCaptor =
+        ArgumentCaptor.forClass(com.ctrip.framework.apollo.openapi.model.OpenItemDTO.class);
+    verify(itemOpenApiService).createOrUpdateItem(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        upsertItemCaptor.capture(), eq(OPERATOR));
+    assertThat(upsertItemCaptor.getValue().getDataChangeCreatedBy()).isEqualTo(OPERATOR);
+    assertThat(upsertItemCaptor.getValue().getDataChangeLastModifiedBy()).isEqualTo(OPERATOR);
+
+    client.removeItem(APP_ID, ENV, null, null, "delete-key", OPERATOR);
+    verify(itemOpenApiService).removeItem(APP_ID, ENV, CLUSTER, NAMESPACE, "delete-key",
+        OPERATOR);
+
+    com.ctrip.framework.apollo.openapi.model.OpenItemPageDTO page =
+        new com.ctrip.framework.apollo.openapi.model.OpenItemPageDTO();
+    page.setPage(1);
+    page.setSize(20);
+    page.setTotal(1L);
+    page.setContent(Collections.singletonList(generatedItem("page-key", "page-value")));
+    when(itemOpenApiService.findItemsByNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, 1, 20))
+        .thenReturn(page);
+    OpenPageDTO<OpenItemDTO> items = client.findItemsByNamespace(APP_ID, ENV, null, null, 1, 20);
+    assertThat(items.getPage()).isEqualTo(1);
+    assertThat(items.getSize()).isEqualTo(20);
+    assertThat(items.getTotal()).isEqualTo(1);
+    assertThat(items.getContent()).extracting(OpenItemDTO::getKey).containsExactly("page-key");
+    verify(itemOpenApiService).findItemsByNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, 1, 20);
+  }
+
+  @Test
+  public void openApiBaseDtoResponsesShouldIncludeAuditDisplayNames() {
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "timeout"))
+        .thenReturn(generatedItemWithAudit("timeout", "100"));
+
+    JsonObject loadedItem = getJsonObject(String.format(
+        "/openapi/v1/envs/%s/apps/%s/clusters/%s/namespaces/%s/items/timeout",
+        ENV, APP_ID, CLUSTER, NAMESPACE));
+    assertAuditDisplayNames(loadedItem);
+    assertThat(loadedItem.get("lineNum").getAsInt()).isEqualTo(3);
+
+    when(itemOpenApiService.createItem(eq(APP_ID), eq(ENV), eq(CLUSTER), eq(NAMESPACE),
+        any(com.ctrip.framework.apollo.openapi.model.OpenItemDTO.class), eq(OPERATOR)))
+        .thenReturn(generatedItemWithAudit("create-key", "create-value"));
+    JsonObject createdItem = postJsonObject(String.format(
+        "/openapi/v1/envs/%s/apps/%s/clusters/%s/namespaces/%s/items?operator=%s",
+        ENV, APP_ID, CLUSTER, NAMESPACE, OPERATOR),
+        "{\"key\":\"create-key\",\"value\":\"create-value\",\"type\":0,\"comment\":\"legacy comment\"}");
+    assertAuditDisplayNames(createdItem);
+
+    com.ctrip.framework.apollo.openapi.model.OpenItemPageDTO page =
+        new com.ctrip.framework.apollo.openapi.model.OpenItemPageDTO();
+    page.setPage(0);
+    page.setSize(50);
+    page.setTotal(1L);
+    page.setContent(Collections.singletonList(generatedItemWithAudit("page-key", "page-value")));
+    when(itemOpenApiService.findItemsByNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, 0, 50))
+        .thenReturn(page);
+    JsonObject itemPage = getJsonObject(String.format(
+        "/openapi/v1/envs/%s/apps/%s/clusters/%s/namespaces/%s/items?page=0&size=50",
+        ENV, APP_ID, CLUSTER, NAMESPACE));
+    assertAuditDisplayNames(itemPage.getAsJsonArray("content").get(0).getAsJsonObject());
+    assertThat(itemPage.getAsJsonArray("content").get(0).getAsJsonObject().get("lineNum")
+        .getAsInt()).isEqualTo(3);
+
+    when(namespaceOpenApiService.findNamespace(APP_ID, ENV, CLUSTER, NAMESPACE, true, true))
+        .thenReturn(generatedNamespaceWithAudit());
+    JsonObject namespace = getJsonObject(String.format(
+        "/openapi/v1/envs/%s/apps/%s/clusters/%s/namespaces/%s?fillItemDetail=true&extendInfo=true",
+        ENV, APP_ID, CLUSTER, NAMESPACE));
+    assertAuditDisplayNames(namespace);
+    assertAuditDisplayNames(namespace.getAsJsonArray("items").get(0).getAsJsonObject());
+  }
+
+  @Test
+  public void legacyReleaseAndInstanceMethodsShouldRemainCompatible() {
+    NamespaceReleaseDTO releaseRequest = new NamespaceReleaseDTO();
+    releaseRequest.setReleaseTitle("legacy-release");
+    releaseRequest.setReleaseComment("release from old client");
+    releaseRequest.setReleasedBy(OPERATOR);
+    releaseRequest.setEmergencyPublish(true);
+
+    when(releaseService.publish(any(NamespaceReleaseModel.class))).thenReturn(releaseDTO(10L));
+    OpenReleaseDTO publishedRelease =
+        client.publishNamespace(APP_ID, ENV, null, null, releaseRequest);
+    assertThat(publishedRelease.getId()).isEqualTo(10L);
+    assertThat(publishedRelease.getDataChangeCreatedTime()).isEqualTo(auditCreatedTime());
+    assertThat(publishedRelease.getDataChangeLastModifiedTime()).isEqualTo(auditModifiedTime());
+    ArgumentCaptor<NamespaceReleaseModel> releaseCaptor =
+        ArgumentCaptor.forClass(NamespaceReleaseModel.class);
+    verify(releaseService).publish(releaseCaptor.capture());
+    assertThat(releaseCaptor.getValue().getReleasedBy()).isEqualTo(OPERATOR);
+    assertThat(releaseCaptor.getValue().isEmergencyPublish()).isTrue();
+    assertThat(releaseCaptor.getValue().getAppId()).isEqualTo(APP_ID);
+    assertThat(releaseCaptor.getValue().getClusterName()).isEqualTo(CLUSTER);
+    assertThat(releaseCaptor.getValue().getNamespaceName()).isEqualTo(NAMESPACE);
+
+    when(releaseService.loadLatestRelease(APP_ID, Env.DEV, CLUSTER, NAMESPACE))
+        .thenReturn(releaseDTO(11L));
+    OpenReleaseDTO latestRelease = client.getLatestActiveRelease(APP_ID, ENV, null, null);
+    assertThat(latestRelease.getId()).isEqualTo(11L);
+    assertThat(latestRelease.getDataChangeCreatedTime()).isEqualTo(auditCreatedTime());
+    verify(releaseService).loadLatestRelease(APP_ID, Env.DEV, CLUSTER, NAMESPACE);
+
+    ReleaseDTO release = releaseDTO(12L);
+    when(releaseService.findReleaseById(Env.valueOf(ENV), 12L)).thenReturn(release);
+    client.rollbackRelease(ENV, 12L, OPERATOR);
+    verify(releaseService).rollback(Env.DEV, 12L, OPERATOR);
+
+    when(instanceService.getInstanceCountByNamespace(APP_ID, Env.DEV, CLUSTER, NAMESPACE))
+        .thenReturn(3);
+    int instanceCount = client.getInstanceCountByNamespace(APP_ID, ENV, null, null);
+    assertThat(instanceCount).isEqualTo(3);
+    verify(instanceService).getInstanceCountByNamespace(APP_ID, Env.DEV, CLUSTER, NAMESPACE);
+  }
+
+  @Test
+  public void convertedItemTimestampsShouldRemainReadableByThePublishedClient() {
+    ItemDTO item = new ItemDTO("dated-key", "value", "comment", 1);
+    item.setDataChangeCreatedTime(auditCreatedTime());
+    item.setDataChangeLastModifiedTime(auditModifiedTime());
+    when(itemOpenApiService.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "dated-key"))
+        .thenReturn(OpenApiModelConverters.fromItemDTO(item));
+
+    OpenItemDTO result = client.getItem(APP_ID, ENV, CLUSTER, NAMESPACE, "dated-key");
+
+    assertThat(result.getDataChangeCreatedTime()).isEqualTo(auditCreatedTime());
+    assertThat(result.getDataChangeLastModifiedTime()).isEqualTo(auditModifiedTime());
+  }
+
+  @Test
+  public void grayRuleResponseShouldPreserveClientIpsAndLabels() {
+    GrayReleaseRuleDTO rules = new GrayReleaseRuleDTO(APP_ID, CLUSTER, NAMESPACE, "gray");
+    rules.addRuleItem(new GrayReleaseRuleItemDTO("client-a", Set.of("10.0.0.1"), Set.of("blue")));
+    rules.addRuleItem(new GrayReleaseRuleItemDTO("client-b", Set.of("*"), Set.of("*")));
+    when(namespaceBranchService.findBranchGrayRules(APP_ID, Env.DEV, CLUSTER, NAMESPACE, "gray"))
+        .thenReturn(rules);
+
+    JsonObject response = getJsonObject(
+        String.format("/openapi/v1/envs/%s/apps/%s/clusters/%s/namespaces/%s/branches/gray/rules",
+            ENV, APP_ID, CLUSTER, NAMESPACE));
+
+    JsonObject expected =
+        new HttpMessageConverterConfiguration().gson().toJsonTree(rules).getAsJsonObject();
+    assertThat(response.get("ruleItems")).isEqualTo(expected.get("ruleItems"));
+  }
+
+  @Test
+  public void instancePageResponseShouldKeepReleaseAndDeliveryMetadata() {
+    InstanceConfigDTO config = new InstanceConfigDTO();
+    config.setRelease(releaseDTO(123L));
+    config.setReleaseDeliveryTime(auditCreatedTime());
+    config.setDataChangeLastModifiedTime(auditModifiedTime());
+    InstanceDTO instance = new InstanceDTO();
+    instance.setId(456L);
+    instance.setAppId("client-app");
+    instance.setConfigs(List.of(config));
+    when(instanceService.getByNamespace(Env.DEV, APP_ID, CLUSTER, NAMESPACE, null, 0, 20))
+        .thenReturn(new PageDTO<>(List.of(instance), PageRequest.of(0, 20), 1L));
+
+    JsonObject response = getJsonObject(String.format(
+        "/openapi/v1/envs/%s/instances/by-namespace?appId=%s&clusterName=%s&namespaceName=%s&page=0&size=20",
+        ENV, APP_ID, CLUSTER, NAMESPACE));
+
+    assertThat(response.get("total").getAsLong()).isEqualTo(1L);
+    assertThat(response.get("page").getAsInt()).isZero();
+    assertThat(response.get("size").getAsInt()).isEqualTo(20);
+    JsonObject returnedInstance = response.getAsJsonArray("instances").get(0).getAsJsonObject();
+    assertThat(returnedInstance.getAsJsonArray("configs").size()).isEqualTo(1);
+    JsonObject returnedConfig = returnedInstance.getAsJsonArray("configs").get(0).getAsJsonObject();
+    JsonObject expectedConfig =
+        new HttpMessageConverterConfiguration().gson().toJsonTree(config).getAsJsonObject();
+    assertThat(returnedConfig.get("releaseDeliveryTime"))
+        .isEqualTo(expectedConfig.get("releaseDeliveryTime"));
+    assertThat(returnedConfig.get("dataChangeLastModifiedTime"))
+        .isEqualTo(expectedConfig.get("dataChangeLastModifiedTime"));
+    assertThat(returnedConfig.getAsJsonObject("release").get("id").getAsLong()).isEqualTo(123L);
+    assertThat(returnedConfig.getAsJsonObject("release").getAsJsonObject("configurations")
+        .get("timeout").getAsString()).isEqualTo("100");
+  }
+
+  private static Date auditCreatedTime() {
+    return Date.from(Instant.parse("2026-09-19T01:02:03.123Z"));
+  }
+
+  private static Date auditModifiedTime() {
+    return Date.from(Instant.parse("2026-09-20T04:05:06.789Z"));
+  }
+
+  private OpenAppDTO legacyApp(String appId) {
+    OpenAppDTO app = new OpenAppDTO();
+    app.setAppId(appId);
+    app.setName("Legacy App");
+    app.setOrgId("org-1");
+    app.setOrgName("Organization One");
+    app.setOwnerName("legacy-owner");
+    app.setOwnerEmail("legacy-owner@example.com");
+    return app;
+  }
+
+  private OpenNamespaceDTO legacyNamespace() {
+    OpenNamespaceDTO namespace = new OpenNamespaceDTO();
+    namespace.setAppId(APP_ID);
+    namespace.setClusterName(CLUSTER);
+    namespace.setNamespaceName(NAMESPACE);
+    namespace.setFormat(ConfigFileFormat.Properties.getValue());
+    namespace.setPublic(false);
+    namespace.setItems(Collections.singletonList(legacyItem("timeout", "100")));
+    return namespace;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO generatedNamespace() {
+    com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO namespace =
+        new com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO();
+    namespace.setAppId(APP_ID);
+    namespace.setClusterName(CLUSTER);
+    namespace.setNamespaceName(NAMESPACE);
+    namespace.setFormat(ConfigFileFormat.Properties.getValue());
+    namespace.setIsPublic(false);
+    namespace.setItems(Collections.singletonList(generatedItem("timeout", "100")));
+    return namespace;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO generatedNamespaceWithAudit() {
+    com.ctrip.framework.apollo.openapi.model.OpenNamespaceDTO namespace = generatedNamespace();
+    namespace.setDataChangeCreatedBy("legacy-creator");
+    namespace.setDataChangeCreatedByDisplayName(AUDIT_CREATED_BY_DISPLAY_NAME);
+    namespace.setDataChangeLastModifiedBy(OPERATOR);
+    namespace.setDataChangeLastModifiedByDisplayName(AUDIT_LAST_MODIFIED_BY_DISPLAY_NAME);
+    namespace.setItems(Collections.singletonList(generatedItemWithAudit("timeout", "100")));
+    return namespace;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO generatedAppNamespace(
+      String namespaceName) {
+    com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO appNamespace =
+        new com.ctrip.framework.apollo.openapi.model.OpenAppNamespaceDTO();
+    appNamespace.setAppId(APP_ID);
+    appNamespace.setName(namespaceName);
+    appNamespace.setFormat(ConfigFileFormat.Properties.getValue());
+    appNamespace.setDataChangeCreatedBy(OPERATOR);
+    appNamespace.setDataChangeLastModifiedBy(OPERATOR);
+    return appNamespace;
+  }
+
+  private OpenItemDTO legacyItem(String key, String value) {
+    OpenItemDTO item = new OpenItemDTO();
+    item.setKey(key);
+    item.setValue(value);
+    item.setComment("legacy comment");
+    item.setType(0);
+    return item;
+  }
+
+  private OpenReleaseDTO legacyRelease(long id) {
+    OpenReleaseDTO release = new OpenReleaseDTO();
+    release.setId(id);
+    release.setAppId(APP_ID);
+    release.setClusterName(CLUSTER);
+    release.setNamespaceName(NAMESPACE);
+    release.setName("legacy-release");
+    release.setComment("legacy release comment");
+    release.setConfigurations(Map.of("timeout", "100"));
+    return release;
+  }
+
+  private ReleaseDTO releaseDTO(long id) {
+    ReleaseDTO release = new ReleaseDTO();
+    release.setId(id);
+    release.setAppId(APP_ID);
+    release.setClusterName(CLUSTER);
+    release.setNamespaceName(NAMESPACE);
+    release.setName("legacy-release");
+    release.setComment("legacy release comment");
+    release.setConfigurations("{\"timeout\":\"100\"}");
+    release.setDataChangeCreatedTime(auditCreatedTime());
+    release.setDataChangeLastModifiedTime(auditModifiedTime());
+    return release;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenAppDTO generatedApp(String appId) {
+    com.ctrip.framework.apollo.openapi.model.OpenAppDTO app =
+        new com.ctrip.framework.apollo.openapi.model.OpenAppDTO();
+    app.setAppId(appId);
+    app.setName("Legacy App");
+    app.setOrgId("org-1");
+    app.setOrgName("Organization One");
+    app.setOwnerName("legacy-owner");
+    app.setOwnerEmail("legacy-owner@example.com");
+    return app;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenClusterDTO generatedCluster(String appId,
+      String clusterName) {
+    com.ctrip.framework.apollo.openapi.model.OpenClusterDTO cluster =
+        new com.ctrip.framework.apollo.openapi.model.OpenClusterDTO();
+    cluster.setAppId(appId);
+    cluster.setName(clusterName);
+    return cluster;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenItemDTO generatedItem(String key,
+      String value) {
+    com.ctrip.framework.apollo.openapi.model.OpenItemDTO item =
+        new com.ctrip.framework.apollo.openapi.model.OpenItemDTO();
+    item.setKey(key);
+    item.setValue(value);
+    item.setType(0);
+    item.setComment("legacy comment");
+    item.setLineNum(3);
+    return item;
+  }
+
+  private com.ctrip.framework.apollo.openapi.model.OpenItemDTO generatedItemWithAudit(String key,
+      String value) {
+    com.ctrip.framework.apollo.openapi.model.OpenItemDTO item = generatedItem(key, value);
+    item.setDataChangeCreatedBy("legacy-creator");
+    item.setDataChangeCreatedByDisplayName(AUDIT_CREATED_BY_DISPLAY_NAME);
+    item.setDataChangeLastModifiedBy(OPERATOR);
+    item.setDataChangeLastModifiedByDisplayName(AUDIT_LAST_MODIFIED_BY_DISPLAY_NAME);
+    return item;
+  }
+
+  private JsonObject getJsonObject(String path) {
+    ResponseEntity<String> response =
+        rawRestTemplate.exchange(url(path), HttpMethod.GET, jsonEntity(null), String.class);
+    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+    return JsonParser.parseString(response.getBody()).getAsJsonObject();
+  }
+
+  private JsonObject postJsonObject(String path, String body) {
+    ResponseEntity<String> response =
+        rawRestTemplate.exchange(url(path), HttpMethod.POST, jsonEntity(body), String.class);
+    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+    return JsonParser.parseString(response.getBody()).getAsJsonObject();
+  }
+
+  private HttpEntity<String> jsonEntity(String body) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.set("Authorization", "legacy-token");
+    return new HttpEntity<>(body, headers);
+  }
+
+  private String url(String path) {
+    return "http://localhost:" + port + path;
+  }
+
+  private void assertAuditDisplayNames(JsonObject json) {
+    assertThat(json.get("dataChangeCreatedByDisplayName").getAsString())
+        .isEqualTo(AUDIT_CREATED_BY_DISPLAY_NAME);
+    assertThat(json.get("dataChangeLastModifiedByDisplayName").getAsString())
+        .isEqualTo(AUDIT_LAST_MODIFIED_BY_DISPLAY_NAME);
+  }
+}

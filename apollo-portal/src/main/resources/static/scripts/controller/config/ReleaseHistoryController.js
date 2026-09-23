@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ function releaseHistoryController($scope, $location, $translate, AppUtil, EventM
     $scope.switchConfigViewType = switchConfigViewType;
     $scope.findReleaseHistory = findReleaseHistory;
     $scope.showText = showText;
+    $scope.showTextDiff = showTextDiff;
 
     EventManager.subscribe(EventManager.EventType.REFRESH_RELEASE_HISTORY, function () {
         location.reload(true);
@@ -207,8 +208,16 @@ function releaseHistoryController($scope, $location, $translate, AppUtil, EventM
     }
 
     function showText(text) {
+        $scope.enableTextDiff = false;
         $scope.text = text;
         AppUtil.showModal("#showTextModal");
+    }
+
+    function showTextDiff(oldStr, newStr) {
+        $scope.enableTextDiff = true;
+        $scope.oldStr = oldStr;
+        $scope.newStr = newStr;
+        AppUtil.showModal('#showTextModal');
     }
 }
 

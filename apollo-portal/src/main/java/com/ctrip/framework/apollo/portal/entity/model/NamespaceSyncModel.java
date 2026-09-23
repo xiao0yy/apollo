@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,17 @@ public class NamespaceSyncModel implements Verifiable {
       }
     }
     return false;
+  }
+
+  public boolean syncToNamespacesValid(String appId, String namespaceName) {
+    for (NamespaceIdentifier namespaceIdentifier : syncToNamespaces) {
+      if (appId.equals(namespaceIdentifier.getAppId())
+          && namespaceName.equals(namespaceIdentifier.getNamespaceName())) {
+        continue;
+      }
+      return false;
+    }
+    return true;
   }
 
   public List<NamespaceIdentifier> getSyncToNamespaces() {

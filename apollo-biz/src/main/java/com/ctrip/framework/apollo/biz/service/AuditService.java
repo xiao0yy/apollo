@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ public class AuditService {
   }
 
   @Transactional
-  void audit(String entityName, Long entityId, Audit.OP op, String owner) {
+  public void audit(String entityName, Long entityId, Audit.OP op, String owner) {
     Audit audit = new Audit();
     audit.setEntityName(entityName);
     audit.setEntityId(entityId);
@@ -51,7 +51,7 @@ public class AuditService {
   }
 
   @Transactional
-  void audit(Audit audit){
+  public void audit(Audit audit) {
     auditRepository.save(audit);
   }
 }

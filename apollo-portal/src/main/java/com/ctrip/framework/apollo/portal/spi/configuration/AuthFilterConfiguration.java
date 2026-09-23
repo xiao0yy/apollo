@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,24 +19,86 @@ package com.ctrip.framework.apollo.portal.spi.configuration;
 import com.ctrip.framework.apollo.openapi.filter.ConsumerAuthenticationFilter;
 import com.ctrip.framework.apollo.openapi.util.ConsumerAuditUtil;
 import com.ctrip.framework.apollo.openapi.util.ConsumerAuthUtil;
-
+import com.ctrip.framework.apollo.portal.filter.PortalUserSessionFilter;
+import com.ctrip.framework.apollo.portal.filter.UserTokenAuthenticationFilter;
+import com.ctrip.framework.apollo.portal.filter.UserTypeResolverFilter;
+import com.ctrip.framework.apollo.portal.service.UserTokenService;
+import com.ctrip.framework.apollo.portal.util.UserTokenAuditUtil;
+import com.ctrip.framework.apollo.portal.util.UserTokenAuthUtil;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 @Configuration
 public class AuthFilterConfiguration {
 
+  private static final int OPEN_API_AUTH_ORDER = -98;
+
   @Bean
-  public FilterRegistrationBean openApiAuthenticationFilter(ConsumerAuthUtil consumerAuthUtil,
-                                                            ConsumerAuditUtil consumerAuditUtil) {
-    FilterRegistrationBean openApiFilter = new FilterRegistrationBean();
+  public UserTokenAuthenticationFilter userTokenAuthenticationFilter(
+      UserTokenService userTokenService, UserTokenAuthUtil userTokenAuthUtil,
+      UserTokenAuditUtil userTokenAuditUtil) {
+    return new UserTokenAuthenticationFilter(userTokenService, userTokenAuthUtil,
+        userTokenAuditUtil);
+  }
+
+  @Bean
+  public FilterRegistrationBean<UserTokenAuthenticationFilter> userTokenFilterRegistration(
+      UserTokenAuthenticationFilter userTokenAuthenticationFilter) {
+    FilterRegistrationBean<UserTokenAuthenticationFilter> registration =
+        new FilterRegistrationBean<>();
+    registration.setFilter(userTokenAuthenticationFilter);
+    // UserTokenAuthenticationFilter is registered inside springSecurityFilterChain by
+    // AuthConfiguration before UsernamePasswordAuthenticationFilter. The security chain keeps
+    // Spring Boot's default order ahead of these OPEN_API_AUTH_ORDER servlet filters, so user-token
+    // requests are authenticated and marked before ConsumerAuthenticationFilter sees them.
+    // Keep this standalone registration disabled to avoid running the same filter twice.
+    registration.setEnabled(false);
+    return registration;
+  }
+
+  @Bean
+  public FilterRegistrationBean<ConsumerAuthenticationFilter> openApiAuthenticationFilter(
+      ConsumerAuthUtil consumerAuthUtil, ConsumerAuditUtil consumerAuditUtil) {
+
+    FilterRegistrationBean<ConsumerAuthenticationFilter> openApiFilter =
+        new FilterRegistrationBean<>();
 
     openApiFilter.setFilter(new ConsumerAuthenticationFilter(consumerAuthUtil, consumerAuditUtil));
     openApiFilter.addUrlPatterns("/openapi/*");
+    openApiFilter.setOrder(OPEN_API_AUTH_ORDER);
 
     return openApiFilter;
   }
 
+  @Bean
+  public FilterRegistrationBean<UserTypeResolverFilter> authTypeResolverFilter() {
+    FilterRegistrationBean<UserTypeResolverFilter> authTypeResolverFilter =
+        new FilterRegistrationBean<>();
+    authTypeResolverFilter.setFilter(new UserTypeResolverFilter());
+    authTypeResolverFilter.addUrlPatterns("/*");
+    authTypeResolverFilter.setOrder(OPEN_API_AUTH_ORDER + 1);
+    return authTypeResolverFilter;
+  }
 
+  /**
+   * Portal user session filter for OpenAPI requests. This filter runs BEFORE
+   * ConsumerAuthenticationFilter to: 1. Allow authenticated Portal users to access OpenAPI 2.
+   * Redirect expired Portal sessions to login page (consistent with Portal endpoints)
+   * <p>
+   * Order: OPEN_API_AUTH_ORDER - 1 (runs first)
+   */
+  @Bean
+  public FilterRegistrationBean<PortalUserSessionFilter> portalUserSessionFilter(
+      Environment environment) {
+    FilterRegistrationBean<PortalUserSessionFilter> filter = new FilterRegistrationBean<>();
+
+    filter.setFilter(new PortalUserSessionFilter(environment));
+    filter.addUrlPatterns("/openapi/*");
+    filter.setOrder(OPEN_API_AUTH_ORDER - 1); // Run before ConsumerAuthenticationFilter after
+                                              // springSecurityFilterChain
+
+    return filter;
+  }
 }

@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/ctripcorp/apollo/master/doc/images/logo/logo-simple.png" alt="apollo-logo" width="40%">
+<img src="https://cdn.jsdelivr.net/gh/apolloconfig/apollo@master/doc/images/logo/logo-simple.png" alt="apollo-logo" width="40%">
 
 # Introduction
 
@@ -10,13 +10,9 @@ The Java SDK does not rely on any framework and can run in all Java runtime envi
 
 The .Net SDK does not rely on any framework and can run in all .Net runtime environments.
 
-For more details of the product introduction, please refer [Introduction to Apollo Configuration Center](zh/design/apollo-introduction).
+For more details of the product introduction, please refer [Introduction to Apollo Configuration Center](en/design/apollo-introduction).
 
-For local demo purpose, please refer [Quick Start](zh/deployment/quick-start).
-
-Demo Environment:
-- [http://106.54.227.205](http://106.54.227.205/)
-- User/Password: apollo/admin
+To try Apollo locally, please refer [Quick Start](en/deployment/quick-start) or [Docker Quick Start](en/deployment/quick-start-docker).
 
 # Screenshots
 ![Screenshot](images/apollo-home-screenshot.jpg)
@@ -36,6 +32,10 @@ Demo Environment:
 
 * **Grayscale release**
     * Support grayscale configuration release, for example, after clicking release, it will only take effect for some application instances. After a period of observation, we could push the configurations to all application instances if there is no problem
+
+- **Global Search Configuration Items**
+  - A fuzzy search of the key and value of a configuration item finds in which application, environment, cluster, namespace the configuration item with the corresponding value is used
+  - It is easy for administrators and SRE roles to quickly and easily find and change the configuration values of resources by highlighting, paging and jumping through configurations
 
 * **Authorization management, release approval and operation audit**
     * Great authorization mechanism is designed for applications and configurations management, and the management of configurations is divided into two operations: editing and publishing, therefore greatly reducing human errors
@@ -62,57 +62,18 @@ Demo Environment:
     * Currently, the only external dependency is MySQL, so the deployment is very simple. Apollo can run as long as Java and MySQL are installed
     * Apollo also provides a packaging script, which can generate all required installation packages with just one click, and supports customization of runtime parameters
 
-# Usage
-1. [Apollo User Guide](zh/usage/apollo-user-guide)
-2. [Java SDK User Guide](zh/usage/java-sdk-user-guide)
-3. [.Net SDK user Guide](zh/usage/dotnet-sdk-user-guide)
-4. [Third Party SDK User Guide](zh/usage/third-party-sdks-user-guide)
-5. [Other Language Client User Guide](zh/usage/other-language-client-user-guide)
-6. [Apollo Open APIs](zh/usage/apollo-open-api-platform)
-7. [Apollo Use Cases](https://github.com/ctripcorp/apollo-use-cases)
-8. [Apollo User Practices](zh/usage/apollo-user-practices)
-9. [Apollo Security Best Practices](zh/usage/apollo-user-guide?id=_71-%e5%ae%89%e5%85%a8%e7%9b%b8%e5%85%b3)
-
-# Design
-* [Apollo Design](zh/design/apollo-design)
-* [Apollo Core Concept - Namespace](zh/design/apollo-core-concept-namespace)
-* [Apollo Architecture Analysis](https://mp.weixin.qq.com/s/-hUaQPzfsl9Lm3IqQW3VDQ)
-* [Apollo Source Code Explanation](http://www.iocoder.cn/categories/Apollo/)
-
-# Development
-* [Apollo Development Guide](zh/development/apollo-development-guide)
-* Code Styles
-    * [Eclipse Code Style](https://github.com/ctripcorp/apollo/blob/master/apollo-buildtools/style/eclipse-java-google-style.xml)
-    * [Intellij Code Style](https://github.com/ctripcorp/apollo/blob/master/apollo-buildtools/style/intellij-java-google-style.xml)
-
-# Deployment
-* [Quick Start](zh/deployment/quick-start)
-* [Distributed Deployment Guide](zh/deployment/distributed-deployment-guide)
-
 # Release Notes
-* [Releases](https://github.com/ctripcorp/apollo/releases)
-
-# FAQ
-* [FAQ](zh/faq/faq)
-* [Common Issues in Deployment & Development Phase](zh/faq/common-issues-in-deployment-and-development-phase)
+* [Releases](https://github.com/apolloconfig/apollo/releases)
 
 # Presentation
 * [Design and Implementation Details of Apollo](http://www.itdks.com/dakalive/detail/3420)
-    * [Slides](https://myslide.cn/slides/10168)
+  * [Slides](https://github.com/apolloconfig/apollo-community/blob/master/slides/design-and-implementation-of-apollo.pdf)
 * [Configuration Center Makes Microservices Smart](https://2018.qconshanghai.com/presentation/799)
-    * [Slides](https://myslide.cn/slides/10035)
+  * [Slides](https://github.com/apolloconfig/apollo-community/blob/master/slides/configuration-center-makes-microservices-smart.pdf)
 
 # Publication
 * [Design and Implementation Details of Apollo](https://www.infoq.cn/article/open-source-configuration-center-apollo)
 * [Configuration Center Makes Microservices Smart](https://mp.weixin.qq.com/s/iDmYJre_ULEIxuliu1EbIQ)
 
-# Contribution
-
-Please make sure to read the [Contributing Guide](https://github.com/ctripcorp/apollo/blob/master/CONTRIBUTING.md) before making a pull request.
-
-Thanks for all the people who contributed to Apollo!
-
-<a href="https://github.com/ctripcorp/apollo/graphs/contributors"><img src="https://opencollective.com/apollo/contributors.svg?width=880&button=false" /></a>
-
 # License
-The project is licensed under the [Apache 2 license](https://github.com/ctripcorp/apollo/blob/master/LICENSE).
+The project is licensed under the [Apache 2 license](https://github.com/apolloconfig/apollo/blob/master/LICENSE).

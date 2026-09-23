@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ public class NamespaceTextModel implements Verifiable {
   private long namespaceId;
   private String format;
   private String configText;
+  private String operator;
 
 
   @Override
@@ -91,5 +92,13 @@ public class NamespaceTextModel implements Verifiable {
 
   public void setFormat(String format) {
     this.format = format;
+  }
+
+  public String getOperator() {
+    return operator;
+  }
+
+  public void setOperator(String operator) {
+    this.operator = operator;
   }
 }

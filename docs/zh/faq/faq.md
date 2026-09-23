@@ -1,5 +1,5 @@
 ## 1. Apollo是什么？
-Apollo（阿波罗）是携程框架部门研发的配置管理平台，能够集中化管理应用不同环境、不同集群的配置，配置修改后能够实时推送到应用端，并且具备规范的权限、流程治理等特性。
+Apollo（阿波罗）是一款可靠的分布式配置管理中心，诞生于携程框架研发部，能够集中化管理应用不同环境、不同集群的配置，配置修改后能够实时推送到应用端，并且具备规范的权限、流程治理等特性，适用于微服务配置管理场景。
 
 更多介绍，可以参考[Apollo配置中心介绍](zh/design/apollo-introduction)
 
@@ -11,13 +11,13 @@ Apollo（阿波罗）是携程框架部门研发的配置管理平台，能够�
 请参考[Apollo核心概念之“Namespace”](zh/design/apollo-core-concept-namespace)
 
 ## 4. 我想要接入Apollo，该如何操作？
-请参考[Apollo使用指南](zh/usage/apollo-user-guide)
+请参考[Apollo使用指南](zh/portal/apollo-user-guide)
 
 ## 5. 我的应用需要不同机房的配置不一样，Apollo是否能支持？
-Apollo是支持的。请参考[Apollo使用指南](zh/usage/apollo-user-guide)中的`三、集群独立配置说明`
+Apollo是支持的。请参考[Apollo使用指南](zh/portal/apollo-user-guide)中的`三、集群独立配置说明`
 
 ## 6. 我有多个应用需要使用同一份配置，Apollo是否能支持？
-Apollo是支持的。请参考[Apollo使用指南](zh/usage/apollo-user-guide)中的`四、多个AppId使用同一份配置`
+Apollo是支持的。请参考[Apollo使用指南](zh/portal/apollo-user-guide)中的`四、多个AppId使用同一份配置`
 
 ## 7. Apollo是否支持查看权限控制或者配置加密？
 从1.1.0版本开始，apollo-portal增加了查看权限的支持，可以支持配置某个环境只允许项目成员查看私有Namespace的配置。
@@ -54,4 +54,19 @@ Spring Cloud Config的精妙之处在于它的配置存储于Git，这就天然�
 ## 10. Apollo和Disconf相比有什么优点？
 
 由于我们自己并非Disconf的资深用户，所以无法主观地给出评价。
-不过之前Apollo技术支持群中的热心网友[@Krast](https://github.com/krast)做了一个[开源配置中心对比矩阵](https://github.com/ctripcorp/apollo/files/983064/default.pdf)，可以参考一下。
+不过之前Apollo技术支持群中的热心网友[@Krast](https://github.com/krast)做了一个[开源配置中心对比矩阵](https://github.com/apolloconfig/apollo/files/983064/default.pdf)，可以参考一下。
+
+## 11. 拉取最新代码后提示找不到 OpenAppDTO 等 `OpenXxxDTO` 类怎么办？
+`apollo-portal` 模块通过 OpenAPI 的 YAML 描述文件在编译阶段生成 `OpenXxxDTO` 类。如果在本地开发时发现这类 DTO 消失或编译报错，请先执行一次 Maven 编译流程触发代码生成：
+
+```bash
+mvn clean compile -pl apollo-portal -am
+```
+
+也可以进入 `apollo-portal` 模块目录直接执行：
+
+```bash
+mvn clean compile
+```
+
+命令完成后，OpenAPI 相关的 DTO 会在 `com.ctrip.framework.apollo.openapi.model` 包下重新生成。

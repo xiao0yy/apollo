@@ -1,5 +1,5 @@
 #
-# Copyright 2021 Apollo Authors
+# Copyright 2024 Apollo Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,14 +20,14 @@ header:
     copyright-owner: Apollo Authors
 
   paths-ignore:
-    - '.github/ISSUE_TEMPLATE'
-    - '.github/PULL_REQUEST_TEMPLATE'
+    - '.github/**'
     - '**/.gitignore'
     - '**/.helmignore'
     - '.gitmodules'
     - '.gitattributes'
     - '.mvn'
     - '**/*.md'
+    - '**/*.svg'
     - '**/*.json'
     - '**/*.conf'
     - '**/*.ftl'
@@ -48,5 +48,8 @@ header:
     - 'apollo-buildtools/src/main/resources/google_checks.xml'
     - 'apollo-core/src/test/resources/META-INF/app-with-utf8bom.properties'
     - 'apollo-core/src/test/resources/properties/server-with-utf8bom.properties'
+    - 'apollo-audit/apollo-audit-spring-boot-starter/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports'
 
   comment: on-failure
+
+  license-location-threshold: 130

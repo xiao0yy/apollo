@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,24 @@
 package com.ctrip.framework.apollo.common.dto;
 
 import com.ctrip.framework.apollo.common.utils.InputValidator;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
-public class ClusterDTO extends BaseDTO{
+public class ClusterDTO extends BaseDTO {
 
   private long id;
 
   @NotBlank(message = "cluster name cannot be blank")
-  @Pattern(
-      regexp = InputValidator.CLUSTER_NAMESPACE_VALIDATOR,
-      message = "Invalid Cluster format: " + InputValidator.INVALID_CLUSTER_NAMESPACE_MESSAGE
-  )
+  @Pattern(regexp = InputValidator.CLUSTER_NAMESPACE_VALIDATOR,
+      message = "Invalid Cluster format: " + InputValidator.INVALID_CLUSTER_NAMESPACE_MESSAGE)
   private String name;
 
   @NotBlank(message = "appId cannot be blank")
   private String appId;
 
   private long parentClusterId;
+
+  private String comment;
 
   public long getId() {
     return id;
@@ -66,5 +66,13 @@ public class ClusterDTO extends BaseDTO{
 
   public void setParentClusterId(long parentClusterId) {
     this.parentClusterId = parentClusterId;
+  }
+
+  public String getComment() {
+    return comment;
+  }
+
+  public void setComment(String comment) {
+    this.comment = comment;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,31 +15,86 @@
  *
  */
 appService.service('ServerConfigService', ['$resource', '$q', 'AppUtil', function ($resource, $q, AppUtil) {
-    var server_config_resource = $resource('', {}, {
-        create_server_config: {
+    let server_config_resource = $resource('', {}, {
+        create_portal_db_config: {
             method: 'POST',
-            url: AppUtil.prefixPath() + '/server/config'
+            url: AppUtil.prefixPath() + '/openapi/v1/server/portal-db/config'
         },
-        get_server_config_info: {
+        create_config_db_config: {
+            method: 'POST',
+            url: AppUtil.prefixPath() + '/openapi/v1/server/envs/:env/config-db/config'
+        },
+        delete_portal_db_config: {
+            method: 'DELETE',
+            url: AppUtil.prefixPath() + '/openapi/v1/server/portal-db/config'
+        },
+        delete_config_db_config: {
+            method: 'DELETE',
+            url: AppUtil.prefixPath() + '/openapi/v1/server/envs/:env/config-db/config'
+        },
+        find_portal_db_config: {
             method: 'GET',
-            url: AppUtil.prefixPath() + '/server/config/:key'
+            isArray: true,
+            url: AppUtil.prefixPath()
+                + '/openapi/v1/server/portal-db/config/find-all-config'
+        },
+        find_config_db_config: {
+            method: 'GET',
+            isArray: true,
+            url: AppUtil.prefixPath()
+                + '/openapi/v1/server/envs/:env/config-db/config/find-all-config'
         }
     });
     return {
-        create: function (serverConfig) {
-            var d = $q.defer();
-            server_config_resource.create_server_config({}, serverConfig, function (result) {
+        createPortalDBConfig: function (serverConfig) {
+            let d = $q.defer();
+            server_config_resource.create_portal_db_config({}, serverConfig, function (result) {
                 d.resolve(result);
             }, function (result) {
                 d.reject(result);
             });
             return d.promise;
         },
-        getServerConfigInfo: function (key) {
-            var d = $q.defer();
-            server_config_resource.get_server_config_info({
-                key: key
+        createConfigDBConfig: function (env, serverConfig) {
+            let d = $q.defer();
+            server_config_resource.create_config_db_config({env:env}, serverConfig, function (result) {
+                d.resolve(result);
             }, function (result) {
+                d.reject(result);
+            });
+            return d.promise;
+        },
+        deletePortalDBConfig: function (key) {
+            let d = $q.defer();
+            server_config_resource.delete_portal_db_config({key: key}, function (result) {
+                d.resolve(result);
+            }, function (result) {
+                d.reject(result);
+            });
+            return d.promise;
+        },
+        deleteConfigDBConfig: function (env, key, cluster) {
+            let d = $q.defer();
+            server_config_resource.delete_config_db_config({env: env, key: key, cluster: cluster}, function (result) {
+                d.resolve(result);
+            }, function (result) {
+                d.reject(result);
+            });
+            return d.promise;
+        },
+        findPortalDBConfig:function (){
+            let d = $q.defer();
+            server_config_resource.find_portal_db_config({
+            }, function (result) {
+                d.resolve(result);
+            }, function (result) {
+                d.reject(result);
+            });
+            return d.promise;
+        },
+        findConfigDBConfig:function (env){
+            let d = $q.defer();
+            server_config_resource.find_config_db_config({env: env}, function (result) {
                 d.resolve(result);
             }, function (result) {
                 d.reject(result);

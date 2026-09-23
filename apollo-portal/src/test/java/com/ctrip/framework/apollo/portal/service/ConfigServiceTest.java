@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,22 +19,22 @@ package com.ctrip.framework.apollo.portal.service;
 import com.ctrip.framework.apollo.common.dto.ItemChangeSets;
 import com.ctrip.framework.apollo.common.dto.ItemDTO;
 import com.ctrip.framework.apollo.common.dto.NamespaceDTO;
+import com.ctrip.framework.apollo.common.dto.ReleaseDTO;
+import com.ctrip.framework.apollo.common.exception.BadRequestException;
 import com.ctrip.framework.apollo.core.ConfigConsts;
 import com.ctrip.framework.apollo.core.enums.ConfigFileFormat;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.portal.AbstractUnitTest;
 import com.ctrip.framework.apollo.portal.api.AdminServiceAPI;
-import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
-import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
 import com.ctrip.framework.apollo.portal.component.txtresolver.PropertyResolver;
 import com.ctrip.framework.apollo.portal.entity.model.NamespaceTextModel;
 import com.ctrip.framework.apollo.portal.entity.vo.ItemDiffs;
 import com.ctrip.framework.apollo.portal.entity.vo.NamespaceIdentifier;
 
 import java.util.Collections;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -43,7 +43,9 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ConfigServiceTest extends AbstractUnitTest {
@@ -56,9 +58,6 @@ public class ConfigServiceTest extends AbstractUnitTest {
   private AdminServiceAPI.ItemAPI itemAPI;
   @Mock
   private PropertyResolver resolver;
-  @Mock
-  private UserInfoHolder userInfoHolder;
-
   @InjectMocks
   private ItemService configService;
 
@@ -74,13 +73,8 @@ public class ConfigServiceTest extends AbstractUnitTest {
     String namespaceName = "application";
     long someNamespaceId = 123L;
 
-    NamespaceTextModel model = new NamespaceTextModel();
-    model.setEnv("DEV");
-    model.setNamespaceName(namespaceName);
-    model.setClusterName(clusterName);
-    model.setAppId(appId);
-    model.setConfigText("a=b\nb=c\nc=d\nd=e");
-    model.setFormat(ConfigFileFormat.Properties.getValue());
+    NamespaceTextModel model =
+        mockNamespaceModel(appId, clusterName, namespaceName, someNamespaceId);
     List<ItemDTO> itemDTOs = mockBaseItemHas3Key();
     ItemChangeSets changeSets = new ItemChangeSets();
     changeSets.addCreateItem(new ItemDTO("d", "c", "", 4));
@@ -92,17 +86,231 @@ public class ConfigServiceTest extends AbstractUnitTest {
     when(itemAPI.findItems(appId, Env.DEV, clusterName, namespaceName)).thenReturn(itemDTOs);
     when(resolver.resolve(someNamespaceId, model.getConfigText(), itemDTOs)).thenReturn(changeSets);
 
-    UserInfo userInfo = new UserInfo();
-    userInfo.setUserId("test");
-    when(userInfoHolder.getUser()).thenReturn(userInfo);
-
-    try {
-      configService.updateConfigItemByText(model);
-    } catch (Exception e) {
-      Assert.fail();
-    }
+    configService.updateConfigItemByText(model, "test");
   }
 
+  private NamespaceTextModel mockNamespaceModel(String appId, String clusterName,
+      String namespaceName, long someNamespaceId) {
+    NamespaceTextModel model = new NamespaceTextModel();
+    model.setEnv("DEV");
+    model.setNamespaceName(namespaceName);
+    model.setClusterName(clusterName);
+    model.setAppId(appId);
+    model.setConfigText("a=b\nb=c\nc=d\nd=e");
+    model.setFormat(ConfigFileFormat.Properties.getValue());
+    model.setNamespaceId(someNamespaceId);
+    return model;
+  }
+
+  @Test(expected = BadRequestException.class)
+  public void testUpdateConfigByTextWithInvalidNamespaceId() {
+    String appId = "6666";
+    String clusterName = "default";
+    String namespaceName = "application";
+    long someNamespaceId = 123L;
+    long anotherNamespaceId = 321L;
+
+    NamespaceTextModel model =
+        mockNamespaceModel(appId, clusterName, namespaceName, anotherNamespaceId);
+    List<ItemDTO> itemDTOs = mockBaseItemHas3Key();
+    ItemChangeSets changeSets = new ItemChangeSets();
+    changeSets.addCreateItem(new ItemDTO("d", "c", "", 4));
+
+    NamespaceDTO someNamespaceDto = mock(NamespaceDTO.class);
+    when(someNamespaceDto.getId()).thenReturn(someNamespaceId);
+    when(namespaceAPI.loadNamespace(appId, model.getEnv(), clusterName, namespaceName))
+        .thenReturn(someNamespaceDto);
+    when(itemAPI.findItems(appId, Env.DEV, clusterName, namespaceName)).thenReturn(itemDTOs);
+    when(resolver.resolve(someNamespaceId, model.getConfigText(), itemDTOs)).thenReturn(changeSets);
+
+    configService.updateConfigItemByText(model, "test");
+  }
+
+  @Test
+  public void testRevokeItemShouldPreserveTypeWhenUpdatingPublishedItem() {
+    String appId = "6666";
+    Env env = Env.DEV;
+    String clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    String namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
+    long namespaceId = 123L;
+
+    NamespaceDTO namespace = generateNamespaceDTO(appId, clusterName, namespaceName);
+    namespace.setId(namespaceId);
+    ReleaseDTO release = new ReleaseDTO();
+    release.setConfigurations("{\"number\":\"42\"}");
+
+    ItemDTO currentItem = new ItemDTO("number", "41", "comment", 1);
+    currentItem.setId(1L);
+    currentItem.setNamespaceId(namespaceId);
+    currentItem.setType(1);
+
+    when(namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName)).thenReturn(namespace);
+    when(releaseAPI.loadLatestRelease(appId, env, clusterName, namespaceName)).thenReturn(release);
+    when(itemAPI.findItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.singletonList(currentItem));
+    when(itemAPI.findDeletedItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.emptyList());
+
+    configService.revokeItem(appId, env, clusterName, namespaceName, "test");
+
+    ArgumentCaptor<ItemChangeSets> captor = ArgumentCaptor.forClass(ItemChangeSets.class);
+    verify(itemAPI).updateItemsByChangeSet(eq(appId), eq(env), eq(clusterName), eq(namespaceName),
+        captor.capture());
+    ItemChangeSets changeSets = captor.getValue();
+    assertEquals(1, changeSets.getUpdateItems().size());
+    assertEquals("42", changeSets.getUpdateItems().get(0).getValue());
+    assertEquals(1, changeSets.getUpdateItems().get(0).getType());
+  }
+
+  @Test
+  public void testRevokeItemShouldRestoreTypeWhenRecreatingDeletedPublishedItem() {
+    String appId = "6666";
+    Env env = Env.DEV;
+    String clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    String namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
+    long namespaceId = 123L;
+
+    NamespaceDTO namespace = generateNamespaceDTO(appId, clusterName, namespaceName);
+    namespace.setId(namespaceId);
+    ReleaseDTO release = new ReleaseDTO();
+    release.setConfigurations("{\"flag\":\"true\"}");
+
+    ItemDTO deletedItem = new ItemDTO("flag", "true", "comment", 1);
+    deletedItem.setNamespaceId(namespaceId);
+    deletedItem.setType(2);
+
+    when(namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName)).thenReturn(namespace);
+    when(releaseAPI.loadLatestRelease(appId, env, clusterName, namespaceName)).thenReturn(release);
+    when(itemAPI.findItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.emptyList());
+    when(itemAPI.findDeletedItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.singletonList(deletedItem));
+
+    configService.revokeItem(appId, env, clusterName, namespaceName, "test");
+
+    ArgumentCaptor<ItemChangeSets> captor = ArgumentCaptor.forClass(ItemChangeSets.class);
+    verify(itemAPI).updateItemsByChangeSet(eq(appId), eq(env), eq(clusterName), eq(namespaceName),
+        captor.capture());
+    ItemChangeSets changeSets = captor.getValue();
+    assertEquals(1, changeSets.getCreateItems().size());
+    assertEquals("true", changeSets.getCreateItems().get(0).getValue());
+    assertEquals(2, changeSets.getCreateItems().get(0).getType());
+  }
+
+  @Test
+  public void testRevokeItemShouldNotUpdateWhenOnlyLineNumbersDiffer() {
+    String appId = "6666";
+    Env env = Env.DEV;
+    String clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    String namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
+    long namespaceId = 123L;
+
+    NamespaceDTO namespace = generateNamespaceDTO(appId, clusterName, namespaceName);
+    namespace.setId(namespaceId);
+    ReleaseDTO release = new ReleaseDTO();
+    release.setConfigurations("{\"a\":\"1\",\"b\":\"2\",\"c\":\"3\"}");
+
+    // persisted items share the same values as the release but have sparse/misaligned line numbers
+    ItemDTO itemA = new ItemDTO("a", "1", "comment", 5);
+    itemA.setId(1L);
+    itemA.setNamespaceId(namespaceId);
+    ItemDTO itemB = new ItemDTO("b", "2", "comment", 9);
+    itemB.setId(2L);
+    itemB.setNamespaceId(namespaceId);
+    ItemDTO itemC = new ItemDTO("c", "3", "comment", 20);
+    itemC.setId(3L);
+    itemC.setNamespaceId(namespaceId);
+
+    when(namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName)).thenReturn(namespace);
+    when(releaseAPI.loadLatestRelease(appId, env, clusterName, namespaceName)).thenReturn(release);
+    when(itemAPI.findItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Arrays.asList(itemA, itemB, itemC));
+    when(itemAPI.findDeletedItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.emptyList());
+
+    configService.revokeItem(appId, env, clusterName, namespaceName, "test");
+
+    ArgumentCaptor<ItemChangeSets> captor = ArgumentCaptor.forClass(ItemChangeSets.class);
+    verify(itemAPI).updateItemsByChangeSet(eq(appId), eq(env), eq(clusterName), eq(namespaceName),
+        captor.capture());
+    ItemChangeSets changeSets = captor.getValue();
+    assertEquals(0, changeSets.getCreateItems().size());
+    assertEquals(0, changeSets.getUpdateItems().size());
+    assertEquals(0, changeSets.getDeleteItems().size());
+  }
+
+  @Test
+  public void testRevokeItemShouldRestorePublishedFileContent() {
+    String appId = "6666";
+    Env env = Env.DEV;
+    String clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    String namespaceName = "application.yaml";
+    long namespaceId = 123L;
+    String publishedContent = "server:\n  port: 8080";
+
+    NamespaceDTO namespace = generateNamespaceDTO(appId, clusterName, namespaceName);
+    namespace.setId(namespaceId);
+    ReleaseDTO release = new ReleaseDTO();
+    release.setConfigurations("{\"content\":\"server:\\n  port: 8080\"}");
+
+    ItemDTO currentItem =
+        new ItemDTO(ConfigConsts.CONFIG_FILE_CONTENT_KEY, "server:\n  port: 9090", "", 1);
+    currentItem.setId(1L);
+    currentItem.setNamespaceId(namespaceId);
+
+    when(namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName)).thenReturn(namespace);
+    when(releaseAPI.loadLatestRelease(appId, env, clusterName, namespaceName)).thenReturn(release);
+    when(itemAPI.findItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.singletonList(currentItem));
+    when(itemAPI.findDeletedItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.emptyList());
+
+    configService.revokeItem(appId, env, clusterName, namespaceName, "test");
+
+    ArgumentCaptor<ItemChangeSets> captor = ArgumentCaptor.forClass(ItemChangeSets.class);
+    verify(itemAPI).updateItemsByChangeSet(eq(appId), eq(env), eq(clusterName), eq(namespaceName),
+        captor.capture());
+    ItemChangeSets changeSets = captor.getValue();
+    assertEquals(0, changeSets.getCreateItems().size());
+    assertEquals(1, changeSets.getUpdateItems().size());
+    assertEquals(0, changeSets.getDeleteItems().size());
+    assertEquals(ConfigConsts.CONFIG_FILE_CONTENT_KEY, changeSets.getUpdateItems().get(0).getKey());
+    assertEquals(publishedContent, changeSets.getUpdateItems().get(0).getValue());
+  }
+
+  @Test
+  public void testRevokeItemShouldRemoveUnpublishedFileContent() {
+    String appId = "6666";
+    Env env = Env.DEV;
+    String clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    String namespaceName = "application.json";
+    long namespaceId = 123L;
+
+    NamespaceDTO namespace = generateNamespaceDTO(appId, clusterName, namespaceName);
+    namespace.setId(namespaceId);
+    ItemDTO currentItem =
+        new ItemDTO(ConfigConsts.CONFIG_FILE_CONTENT_KEY, "{\"enabled\":true}", "", 1);
+    currentItem.setId(1L);
+    currentItem.setNamespaceId(namespaceId);
+
+    when(namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName)).thenReturn(namespace);
+    when(releaseAPI.loadLatestRelease(appId, env, clusterName, namespaceName)).thenReturn(null);
+    when(itemAPI.findItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.singletonList(currentItem));
+    when(itemAPI.findDeletedItems(appId, env, clusterName, namespaceName))
+        .thenReturn(Collections.emptyList());
+
+    configService.revokeItem(appId, env, clusterName, namespaceName, "test");
+
+    ArgumentCaptor<ItemChangeSets> captor = ArgumentCaptor.forClass(ItemChangeSets.class);
+    verify(itemAPI).updateItemsByChangeSet(eq(appId), eq(env), eq(clusterName), eq(namespaceName),
+        captor.capture());
+    ItemChangeSets changeSets = captor.getValue();
+    assertEquals(0, changeSets.getCreateItems().size());
+    assertEquals(0, changeSets.getUpdateItems().size());
+    assertEquals(1, changeSets.getDeleteItems().size());
+    assertEquals(ConfigConsts.CONFIG_FILE_CONTENT_KEY, changeSets.getDeleteItems().get(0).getKey());
+  }
 
   /**
    * a=b b=c c=d
@@ -121,17 +329,13 @@ public class ConfigServiceTest extends AbstractUnitTest {
 
     String appId = "6666", env = "LOCAL", clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT,
         namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
-    List<NamespaceIdentifier>
-        namespaceIdentifiers =
+    List<NamespaceIdentifier> namespaceIdentifiers =
         generateNamespaceIdentifier(appId, env, clusterName, namespaceName);
     NamespaceDTO namespaceDTO = generateNamespaceDTO(appId, clusterName, namespaceName);
 
-    when(namespaceAPI.loadNamespace(appId, Env.valueOf(env), clusterName, namespaceName)).thenReturn(namespaceDTO);
+    when(namespaceAPI.loadNamespace(appId, Env.valueOf(env), clusterName, namespaceName))
+        .thenReturn(namespaceDTO);
     when(itemAPI.findItems(appId, Env.valueOf(env), clusterName, namespaceName)).thenReturn(null);
-
-    UserInfo userInfo = new UserInfo();
-    userInfo.setUserId("test");
-    when(userInfoHolder.getUser()).thenReturn(userInfo);
 
     List<ItemDiffs> itemDiffses = configService.compare(namespaceIdentifiers, sourceItems);
 
@@ -151,8 +355,8 @@ public class ConfigServiceTest extends AbstractUnitTest {
 
   @Test
   public void testCompare() {
-    ItemDTO sourceItem1 = new ItemDTO("a", "b", "comment", 1);//not modified
-    ItemDTO sourceItem2 = new ItemDTO("newKey", "c", "comment", 2);//new item
+    ItemDTO sourceItem1 = new ItemDTO("a", "b", "comment", 1);// not modified
+    ItemDTO sourceItem2 = new ItemDTO("newKey", "c", "comment", 2);// new item
     ItemDTO sourceItem3 = new ItemDTO("c", "newValue", "comment", 3);// update value
     ItemDTO sourceItem4 = new ItemDTO("d", "b", "newComment", 4);// update comment
     List<ItemDTO> sourceItems = Arrays.asList(sourceItem1, sourceItem2, sourceItem3, sourceItem4);
@@ -164,17 +368,14 @@ public class ConfigServiceTest extends AbstractUnitTest {
 
     String appId = "6666", env = "LOCAL", clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT,
         namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
-    List<NamespaceIdentifier>
-        namespaceIdentifiers =
+    List<NamespaceIdentifier> namespaceIdentifiers =
         generateNamespaceIdentifier(appId, env, clusterName, namespaceName);
     NamespaceDTO namespaceDTO = generateNamespaceDTO(appId, clusterName, namespaceName);
 
-    when(namespaceAPI.loadNamespace(appId, Env.valueOf(env), clusterName, namespaceName)).thenReturn(namespaceDTO);
-    when(itemAPI.findItems(appId, Env.valueOf(env), clusterName, namespaceName)).thenReturn(targetItems);
-
-    UserInfo userInfo = new UserInfo();
-    userInfo.setUserId("test");
-    when(userInfoHolder.getUser()).thenReturn(userInfo);
+    when(namespaceAPI.loadNamespace(appId, Env.valueOf(env), clusterName, namespaceName))
+        .thenReturn(namespaceDTO);
+    when(itemAPI.findItems(appId, Env.valueOf(env), clusterName, namespaceName))
+        .thenReturn(targetItems);
 
     List<ItemDiffs> itemDiffses = configService.compare(namespaceIdentifiers, sourceItems);
     assertEquals(1, itemDiffses.size());
@@ -214,7 +415,8 @@ public class ConfigServiceTest extends AbstractUnitTest {
 
   }
 
-  private NamespaceDTO generateNamespaceDTO(String appId, String clusterName, String namespaceName) {
+  private NamespaceDTO generateNamespaceDTO(String appId, String clusterName,
+      String namespaceName) {
     NamespaceDTO namespaceDTO = new NamespaceDTO();
     namespaceDTO.setAppId(appId);
     namespaceDTO.setId(1);
@@ -223,8 +425,8 @@ public class ConfigServiceTest extends AbstractUnitTest {
     return namespaceDTO;
   }
 
-  private List<NamespaceIdentifier> generateNamespaceIdentifier(String appId, String env, String clusterName,
-                                                                String namespaceName) {
+  private List<NamespaceIdentifier> generateNamespaceIdentifier(String appId, String env,
+      String clusterName, String namespaceName) {
     NamespaceIdentifier targetNamespace = new NamespaceIdentifier();
     targetNamespace.setAppId(appId);
     targetNamespace.setEnv(env);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ public class InputValidatorTest {
     checkClusterName("some.&.name", false);
     checkClusterName("", false);
     checkClusterName(null, false);
+    checkClusterName(".", false);
   }
 
   @Test
@@ -42,6 +43,7 @@ public class InputValidatorTest {
     checkAppNamespaceName("some.name.yaml", false);
     checkAppNamespaceName("some.name.xml", false);
     checkAppNamespaceName("some.name.properties", false);
+    checkAppNamespaceName("..xml", false);
   }
 
   private void checkClusterName(String name, boolean valid) {

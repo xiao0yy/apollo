@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ public class DefaultUserInfoHolder implements UserInfoHolder {
   public UserInfo getUser() {
     UserInfo userInfo = new UserInfo();
     userInfo.setUserId("apollo");
+    userInfo.setName("apollo");
     return userInfo;
   }
 }

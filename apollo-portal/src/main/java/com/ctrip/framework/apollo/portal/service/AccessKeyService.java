@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ public class AccessKeyService {
     accessKeyAPI.delete(env, appId, id, operator);
   }
 
-  public void enable(Env env, String appId, long id, String operator) {
-    accessKeyAPI.enable(env, appId, id, operator);
+  public void enable(Env env, String appId, long id, int mode, String operator) {
+    accessKeyAPI.enable(env, appId, id, mode, operator);
   }
 
   public void disable(Env env, String appId, long id, String operator) {

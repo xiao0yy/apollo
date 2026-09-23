@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ appService.service("OrganizationService", ['$resource', '$q', 'AppUtil', functio
         find_organizations: {
             method: 'GET',
             isArray: true,
-            url: AppUtil.prefixPath() + '/organizations'
+            url: AppUtil.prefixPath() + '/openapi/v1/organizations'
         }
     });
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 import com.ctrip.framework.apollo.configservice.service.AccessKeyServiceWithCache;
 import com.google.common.collect.Lists;
 import java.util.List;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -89,13 +89,97 @@ public class AccessKeyUtilTest {
   }
 
   @Test
-  public void testExtractAppIdFromRequest4() {
+  public void testExtractAppIdFromRawConfigFileRequest() {
+    when(request.getServletPath()).thenReturn("/configfiles/raw/someAppId/default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isEqualTo("someAppId");
+  }
+
+  @Test
+  public void testExtractAppIdFromConfigFileRequestWithRawAppId() {
+    when(request.getServletPath()).thenReturn("/configfiles/raw/default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isEqualTo("raw");
+  }
+
+  @Test
+  public void testExtractAppIdFromConfigFileRequestWithJsonAppId() {
+    when(request.getServletPath()).thenReturn("/configfiles/json/default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isEqualTo("json");
+  }
+
+  @Test
+  public void testExtractAppIdFromRawConfigFileRequestShouldRejectAppIdWithTrailingSpace() {
+    when(request.getServletPath()).thenReturn("/configfiles/raw/mysql.example.test /default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isNull();
+  }
+
+  @Test
+  public void testExtractAppIdFromRequest5() {
     when(request.getServletPath()).thenReturn("/notifications/v2");
     when(request.getParameter("appId")).thenReturn("someAppId");
 
     String appId = accessKeyUtil.extractAppIdFromRequest(request);
 
     assertThat(appId).isEqualTo("someAppId");
+  }
+
+  @Test
+  public void testExtractAppIdFromV1NotificationRequest() {
+    when(request.getServletPath()).thenReturn("/notifications");
+    when(request.getParameter("appId")).thenReturn("someAppId");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isEqualTo("someAppId");
+  }
+
+  @Test
+  public void testExtractAppIdFromV1NotificationRequestShouldRejectAppIdWithTrailingSpace() {
+    when(request.getServletPath()).thenReturn("/notifications");
+    when(request.getParameter("appId")).thenReturn("mysql.example.test ");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isNull();
+  }
+
+  @Test
+  public void testExtractAppIdFromRequestShouldRejectAppIdWithDiacritic() {
+    when(request.getServletPath()).thenReturn("/configs/mysql.exámple.test/default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isNull();
+  }
+
+  @Test
+  public void testExtractAppIdFromRequestShouldRejectAppIdWithTrailingSpace() {
+    when(request.getServletPath()).thenReturn("/configs/mysql.example.test /default/application");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isNull();
+  }
+
+  @Test
+  public void testExtractAppIdFromNotificationRequestShouldRejectAppIdWithTrailingSpace() {
+    when(request.getServletPath()).thenReturn("/notifications/v2");
+    when(request.getParameter("appId")).thenReturn("mysql.example.test ");
+
+    String appId = accessKeyUtil.extractAppIdFromRequest(request);
+
+    assertThat(appId).isNull();
   }
 
   @Test

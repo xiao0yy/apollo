@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ namespace_module.controller("LinkNamespaceController",
 
             var params = AppUtil.parseParams($location.$$url);
             $scope.appId = params.appid;
-            $scope.type = 'link';
+            $scope.type = 'create';
 
             $scope.step = 1;
 
@@ -37,12 +37,12 @@ namespace_module.controller("LinkNamespaceController",
                 $scope.pageSetting = setting;
             });
 
-            NamespaceService.find_public_namespaces().then(function (result) {
+            NamespaceService.findPublicNamespaceNames().then(function (result) {
                 var publicNamespaces = [];
                 result.forEach(function (item) {
                     var namespace = {};
-                    namespace.id = item.name;
-                    namespace.text = item.name;
+                    namespace.id = item;
+                    namespace.text = item;
                     publicNamespaces.push(namespace);
                 });
                 $('#namespaces').select2({
@@ -66,7 +66,7 @@ namespace_module.controller("LinkNamespaceController",
                 appId: $scope.appId,
                 name: '',
                 comment: '',
-                isPublic: true,
+                isPublic: false,
                 format: 'properties'
             };
 
@@ -86,7 +86,7 @@ namespace_module.controller("LinkNamespaceController",
             };
 
             function shouldAppendNamespacePrefix() {
-                 return $scope.appNamespace.isPublic ? $scope.appendNamespacePrefix : false;
+                return $scope.appNamespace.isPublic ? $scope.appendNamespacePrefix : false;
             }
 
             var selectedClusters = [];
@@ -94,32 +94,38 @@ namespace_module.controller("LinkNamespaceController",
                 selectedClusters = data;
             };
             $scope.createNamespace = function () {
-                if ($scope.type == 'link') {
-                    if (selectedClusters.length == 0) {
+                if ($scope.type === 'link') {
+                    if (selectedClusters.length === 0) {
                         toastr.warning($translate.instant('Namespace.PleaseChooseCluster'));
                         return;
                     }
 
-                    if ($scope.namespaceType == 1) {
-                        var selectedNamespaceName = $('#namespaces').select2('data')[0].id;
-                        if (!selectedNamespaceName) {
+                    if ($scope.namespaceType === 1) {
+                        var selectedNamespaceNames = $('#namespaces').select2('data');
+                        var ids = []
+                        selectedNamespaceNames.forEach(function (namespace) {
+                            ids.push(namespace.id)
+                        })
+                        if (ids.length === 0) {
                             toastr.warning($translate.instant('Namespace.PleaseChooseNamespace'));
                             return;
                         }
 
-                        $scope.namespaceName = selectedNamespaceName;
+                        $scope.namespaceNames = ids;
                     }
 
                     var namespaceCreationModels = [];
                     selectedClusters.forEach(function (cluster) {
-                        namespaceCreationModels.push({
-                            env: cluster.env,
-                            namespace: {
-                                appId: $scope.appId,
-                                clusterName: cluster.clusterName,
-                                namespaceName: $scope.namespaceName
-                            }
-                        });
+                        $scope.namespaceNames.forEach(function (namespace) {
+                            namespaceCreationModels.push({
+                                env: cluster.env,
+                                namespace: {
+                                    appId: $scope.appId,
+                                    clusterName: cluster.clusterName,
+                                    namespaceName: namespace
+                                }
+                            });
+                        })
                     });
 
                     $scope.submitBtnDisabled = true;
@@ -129,9 +135,14 @@ namespace_module.controller("LinkNamespaceController",
                             $scope.step = 2;
                             setInterval(function () {
                                 $scope.submitBtnDisabled = false;
-                                $window.location.href =
-                                AppUtil.prefixPath() + '/namespace/role.html?#appid=' + $scope.appId
-                                    + "&namespaceName=" + $scope.namespaceName;
+                                if ($scope.namespaceNames.length === 1) {
+                                    $window.location.href =
+                                    AppUtil.prefixPath() + '/namespace/role.html?#appid=' + $scope.appId
+                                    + "&namespaceName=" + $scope.namespaceNames[0];
+                                } else {
+                                    $window.location.href =
+                                        AppUtil.prefixPath() + '/config.html?#/appid=' + $scope.appId;
+                                }
                             }, 1000);
                         }, function (result) {
                             $scope.submitBtnDisabled = false;
@@ -147,11 +158,6 @@ namespace_module.controller("LinkNamespaceController",
                         });
                         toastr.error(errorTip);
                         return;
-                    }
-
-                    // public namespaces only allow properties format
-                    if ($scope.appNamespace.isPublic) {
-                        $scope.appNamespace.format = 'properties';
                     }
 
                     $scope.submitBtnDisabled = true;

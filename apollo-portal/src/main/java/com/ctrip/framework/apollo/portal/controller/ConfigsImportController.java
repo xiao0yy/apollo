@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,15 @@
  */
 package com.ctrip.framework.apollo.portal.controller;
 
+import com.ctrip.framework.apollo.common.exception.BadRequestException;
+import com.google.common.base.Splitter;
+
 import com.ctrip.framework.apollo.core.enums.ConfigFileFormat;
+import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.portal.service.ConfigsImportService;
+import com.ctrip.framework.apollo.portal.spi.UserInfoHolder;
 import com.ctrip.framework.apollo.portal.util.ConfigFileUtils;
-import java.io.IOException;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,20 +32,34 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.zip.ZipInputStream;
+
 /**
- * Import the configs from file.
- * First version: move code from {@link ConfigsExportController}
+ * Import the configs from file. First version: move code from {@link ConfigsExportController}
+ *
  * @author wxq
  */
+/**
+ * @deprecated Portal UI uses /openapi/v1 endpoints. This legacy WebAPI controller is kept for
+ *     compatibility.
+ */
+@Deprecated
 @RestController
 public class ConfigsImportController {
-
+  private static final String ENV_SEPARATOR = ",";
+  private static final String CONFLICT_ACTION_IGNORE = "ignore";
+  private static final String CONFLICT_ACTION_COVER = "cover";
   private final ConfigsImportService configsImportService;
+  private final UserInfoHolder userInfoHolder;
 
-  public ConfigsImportController(
-      final ConfigsImportService configsImportService
-  ) {
+  public ConfigsImportController(final ConfigsImportService configsImportService,
+      final UserInfoHolder userInfoHolder) {
     this.configsImportService = configsImportService;
+    this.userInfoHolder = userInfoHolder;
   }
 
   /**
@@ -50,7 +69,8 @@ public class ConfigsImportController {
    *             etc.
    * @throws IOException
    */
-  @PreAuthorize(value = "@permissionValidator.hasModifyNamespacePermission(#appId, #namespaceName, #env)")
+  @PreAuthorize(
+      value = "@unifiedPermissionValidator.hasModifyNamespacePermission(#appId, #env, #clusterName, #namespaceName)")
   @PostMapping("/apps/{appId}/envs/{env}/clusters/{clusterName}/namespaces/{namespaceName}/items/import")
   public void importConfigFile(@PathVariable String appId, @PathVariable String env,
       @PathVariable String clusterName, @PathVariable String namespaceName,
@@ -58,7 +78,50 @@ public class ConfigsImportController {
     // check file
     ConfigFileUtils.check(file);
     final String format = ConfigFileUtils.getFormat(file.getOriginalFilename());
-    final String standardFilename = ConfigFileUtils.toFilename(appId, clusterName, namespaceName, ConfigFileFormat.fromString(format));
-    configsImportService.importOneConfigFromFile(env, standardFilename, file.getInputStream());
+    final String standardFilename = ConfigFileUtils.toFilename(appId, clusterName, namespaceName,
+        ConfigFileFormat.fromString(format));
+
+    configsImportService.forceImportNamespaceFromFile(Env.valueOf(env), standardFilename,
+        file.getInputStream(), userInfoHolder.getUser().getUserId());
+  }
+
+  @PreAuthorize(value = "@unifiedPermissionValidator.isSuperAdmin()")
+  @PostMapping(value = "/configs/import")
+  public void importConfigByZip(@RequestParam(value = "envs") String envs,
+      @RequestParam(defaultValue = CONFLICT_ACTION_IGNORE) String conflictAction,
+      @RequestParam("file") MultipartFile file) throws IOException {
+    validateConflictAction(conflictAction);
+    boolean ignoreConflictNamespace = conflictAction.equals(CONFLICT_ACTION_IGNORE);
+
+    List<Env> importEnvs = Splitter.on(ENV_SEPARATOR).splitToList(envs).stream().map(Env::valueOf)
+        .collect(Collectors.toList());
+
+    byte[] bytes = file.getBytes();
+    try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+      configsImportService.importDataFromZipFile(importEnvs, zipInputStream,
+          ignoreConflictNamespace, userInfoHolder.getUser().getUserId());
+    }
+  }
+
+  @PreAuthorize(value = "@unifiedPermissionValidator.isAppAdmin(#appId)")
+  @PostMapping(value = "/apps/{appId}/envs/{env}/clusters/{clusterName}/import")
+  public void importAppConfigByZip(@PathVariable String appId, @PathVariable String env,
+      @PathVariable String clusterName,
+      @RequestParam(defaultValue = CONFLICT_ACTION_IGNORE) String conflictAction,
+      @RequestParam("file") MultipartFile file) throws IOException {
+    validateConflictAction(conflictAction);
+    boolean ignoreConflictNamespace = conflictAction.equals(CONFLICT_ACTION_IGNORE);
+    byte[] bytes = file.getBytes();
+    try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+      configsImportService.importAppConfigFromZipFile(appId, Env.valueOf(env), clusterName,
+          zipInputStream, ignoreConflictNamespace, userInfoHolder.getUser().getUserId());
+    }
+  }
+
+  private void validateConflictAction(String conflictAction) {
+    if (!conflictAction.equals(CONFLICT_ACTION_COVER)
+        && !conflictAction.equals(CONFLICT_ACTION_IGNORE)) {
+      throw new BadRequestException("ConflictAction is incorrect.");
+    }
   }
 }

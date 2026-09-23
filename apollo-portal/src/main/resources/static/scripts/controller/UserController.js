@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2024 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,14 @@ user_module.controller('UserController',
 function UserController($scope, $window, $translate, toastr, AppUtil, UserService, PermissionService) {
 
     $scope.user = {};
+    $scope.createdUsers = [];
+    $scope.filterUser = [];
+    $scope.status = '1'
+    $scope.searchKey = ''
+    $scope.changeStatus = changeStatus
+    $scope.searchUsers = searchUsers
+    $scope.resetSearchUser = resetSearchUser
+    $scope.validatePwdMatch = validatePwdMatch
 
     initPermission();
 
@@ -28,15 +36,114 @@ function UserController($scope, $window, $translate, toastr, AppUtil, UserServic
         PermissionService.has_root_permission()
         .then(function (result) {
             $scope.isRootUser = result.hasPermission;
+            getCreatedUsers();
+        })
+    }
+
+    function getCreatedUsers() {
+        if ($scope.isRootUser) {
+            UserService.find_users("",true)
+            .then(function (result) {
+                if (!result || result.length === 0) {
+                    return;
+                }
+                $scope.createdUsers = [];
+                $scope.filterUser = [];
+                result.forEach(function (user) {
+                    $scope.createdUsers.push(user);
+                    $scope.filterUser.push(user);
+                });
+            });
+        } else {
+            UserService.load_user()
+            .then(function (result) {
+                if (!result) {
+                    return;
+                }
+                $scope.createdUsers = [result];
+                $scope.filterUser = [result];
+            });
+        }
+    }
+
+    function changeStatus(status, user){
+        $scope.status = status
+        $scope.user = {}
+        if (user != null) {
+            $scope.user = {
+                username: user.userId,
+                userDisplayName: user.name,
+                email: user.email,
+                enabled: user.enabled,
+            }
+        }
+    }
+
+    function searchUsers() {
+        $scope.searchKey = $scope.searchKey.toLowerCase();
+        var filterUser = []
+        $scope.createdUsers.forEach(function (item) {
+            var userLoginName = item.userId;
+            if (userLoginName && userLoginName.toLowerCase().indexOf( $scope.searchKey) >= 0) {
+                filterUser.push(item);
+            }
+        });
+        $scope.filterUser = filterUser
+    }
+
+    function resetSearchUser() {
+        $scope.searchKey = ''
+        searchUsers()
+    }
+
+    function validatePwdMatch() {
+        $scope.pwdNotMatch = false;
+        if ($scope.user.password && $scope.user.password != $scope.user.confirmPassword) {
+            $scope.pwdNotMatch = true;
+        }
+    }
+
+    $scope.changeUserEnabled = function (user) {
+        var newUser={}
+        if (user != null) {
+            newUser = {
+                username: user.userId,
+                userDisplayName: user.name,
+                email: user.email,
+                enabled: user.enabled === 1 ? 0 : 1,
+            }
+        }
+        UserService.change_user_enabled(newUser).then(function (result) {
+            toastr.success($translate.instant('UserMange.Enabled.succeed'));
+            getCreatedUsers()
+        }, function (result) {
+            AppUtil.showErrorMsg(result, $translate.instant('UserMange.Enabled.failure'));
         })
     }
 
     $scope.createOrUpdateUser = function () {
-        UserService.createOrUpdateUser($scope.user).then(function (result) {
-            toastr.success($translate.instant('UserMange.Created'));
-        }, function (result) {
-            AppUtil.showErrorMsg(result, $translate.instant('UserMange.CreateFailed'));
-        })
+        validatePwdMatch();
+        if ($scope.pwdNotMatch) {
+            return;
+        }
+        if ($scope.status === '2') {
+            UserService.createOrUpdateUser(true, $scope.user).then(function (result) {
+                toastr.success($translate.instant('UserMange.Created'));
+                getCreatedUsers()
+                changeStatus('1')
+            }, function (result) {
+                AppUtil.showErrorMsg(result, $translate.instant('UserMange.CreateFailed'));
+            })
+        } else {
+            UserService.createOrUpdateUser(false,$scope.user).then(function (result) {
+                toastr.success($translate.instant('UserMange.Edited'));
+                getCreatedUsers()
+                changeStatus('1')
+            }, function (result) {
+                AppUtil.showErrorMsg(result, $translate.instant('UserMange.EditFailed'));
+            })
+        }
+
 
     }
 }

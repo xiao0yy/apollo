@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  */
 package com.ctrip.framework.apollo.portal.component;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,7 +60,7 @@ public class ConfigReleaseWebhookNotifier {
 
     for (String webHookUrl : webHookUrls) {
       HttpHeaders headers = new HttpHeaders();
-      headers.setContentType(MediaType.APPLICATION_JSON_UTF8);
+      headers.setContentType(MediaType.APPLICATION_JSON);
       HttpEntity entity = new HttpEntity(releaseHistory, headers);
       String url = webHookUrl + "?env={env}";
       try {

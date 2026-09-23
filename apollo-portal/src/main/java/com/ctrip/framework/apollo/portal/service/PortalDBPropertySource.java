@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,16 @@ import com.ctrip.framework.apollo.portal.repository.ServerConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.jdbc.datasource.init.DatabasePopulatorUtils;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
+import jakarta.annotation.PostConstruct;
+import javax.sql.DataSource;
 import java.util.Objects;
 
 
@@ -38,30 +45,44 @@ import java.util.Objects;
 public class PortalDBPropertySource extends RefreshablePropertySource {
   private static final Logger logger = LoggerFactory.getLogger(PortalDBPropertySource.class);
 
-  @Autowired
-  private ServerConfigRepository serverConfigRepository;
+  private final ServerConfigRepository serverConfigRepository;
 
-  public PortalDBPropertySource(String name, Map<String, Object> source) {
-    super(name, source);
+  private final DataSource dataSource;
+
+  private final Environment env;
+
+  @Autowired
+  public PortalDBPropertySource(final ServerConfigRepository serverConfigRepository,
+      DataSource dataSource, final Environment env) {
+    super("DBConfig", Maps.newConcurrentMap());
+    this.serverConfigRepository = serverConfigRepository;
+    this.dataSource = dataSource;
+    this.env = env;
   }
 
-  public PortalDBPropertySource() {
-    super("DBConfig", Maps.newConcurrentMap());
+  @PostConstruct
+  public void runSqlScript() throws Exception {
+    if (env.acceptsProfiles(Profiles.of("h2")) && !env.acceptsProfiles(Profiles.of("assembly"))) {
+      Resource resource = new ClassPathResource("jpa/portaldb.init.h2.sql");
+      if (resource.exists()) {
+        DatabasePopulatorUtils.execute(new ResourceDatabasePopulator(resource), dataSource);
+      }
+    }
   }
 
   @Override
   protected void refresh() {
     Iterable<ServerConfig> dbConfigs = serverConfigRepository.findAll();
 
-    for (ServerConfig config: dbConfigs) {
+    for (ServerConfig config : dbConfigs) {
       String key = config.getKey();
       Object value = config.getValue();
 
       if (this.source.isEmpty()) {
         logger.info("Load config from DB : {} = {}", key, value);
       } else if (!Objects.equals(this.source.get(key), value)) {
-        logger.info("Load config from DB : {} = {}. Old value = {}", key,
-                    value, this.source.get(key));
+        logger.info("Load config from DB : {} = {}. Old value = {}", key, value,
+            this.source.get(key));
       }
 
       this.source.put(key, value);

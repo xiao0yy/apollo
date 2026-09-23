@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Apollo Authors
+ * Copyright 2025 Apollo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,38 +16,15 @@
  */
 package com.ctrip.framework.apollo.portal.spi.configuration;
 
-import com.ctrip.framework.apollo.common.condition.ConditionalOnMissingProfile;
-import com.ctrip.framework.apollo.portal.spi.ctrip.CtripMQService;
 import com.ctrip.framework.apollo.portal.spi.defaultimpl.DefaultMQService;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 @Configuration
 public class MQConfiguration {
 
-  @Configuration
-  @Profile("ctrip")
-  public static class CtripMQConfiguration {
-
-    @Bean
-    public CtripMQService mqService() {
-      return new CtripMQService();
-    }
+  @Bean
+  public DefaultMQService mqService() {
+    return new DefaultMQService();
   }
-
-  /**
-   * spring.profiles.active != ctrip
-   */
-  @Configuration
-  @ConditionalOnMissingProfile({"ctrip"})
-  public static class DefaultMQConfiguration {
-
-    @Bean
-    public DefaultMQService mqService() {
-      return new DefaultMQService();
-    }
-  }
-
 }
